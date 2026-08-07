@@ -1,0 +1,66 @@
+# depslib dependency file v1.0
+1785913588 source:d:\term\term8\oop\final\oop2\main.cpp
+	<SDL3/SDL.h>
+	"Page.h"
+	<iostream>
+	<SDL3_ttf/SDL_ttf.h>
+	"TextRenderer.h"
+	"Menu.h"
+	"NewProject.h"
+	"OpenProject.h"
+
+1785905430 d:\term\term8\oop\final\oop2\page.h
+
+1785899709 source:d:\term\term8\oop\final\oop2\button.cpp
+	"Button.h"
+
+1785899709 d:\term\term8\oop\final\oop2\button.h
+	<SDL3/SDL.h>
+
+1785908291 source:d:\term\term8\oop\final\oop2\textrenderer.cpp
+	"TextRenderer.h"
+	<iostream>
+
+1785910373 d:\term\term8\oop\final\oop2\textrenderer.h
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+
+1785911378 source:d:\term\term8\oop\final\oop2\menu.cpp
+	"Menu.h"
+	<SDL3/SDL.h>
+	<iostream>
+	"openProject.h"
+
+1785907215 d:\term\term8\oop\final\oop2\menu.h
+	<SDL3/SDL.h>
+	"Page.h"
+
+1785905954 d:\term\term8\oop\final\oop2\newproject.h
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+
+1785913351 source:d:\term\term8\oop\final\oop2\projectmanager.cpp
+	"ProjectManager.h"
+	<fstream>
+
+1785912281 d:\term\term8\oop\final\oop2\projectmanager.h
+	<string>
+	<vector>
+
+1785913338 source:d:\term\term8\oop\final\oop2\newproject.cpp
+	"NewProject.h"
+	"ProjectManager.h"
+	"TextRenderer.h"
+	<iostream>
+	<string>
+
+1785912409 d:\term\term8\oop\final\oop2\openproject.h
+	<SDL3/SDL.h>
+	<vector>
+	"ProjectManager.h"
+
+1785912409 source:d:\term\term8\oop\final\oop2\openproject.cpp
+	"OpenProject.h"
+	"TextRenderer.h"
+	<iostream>
+

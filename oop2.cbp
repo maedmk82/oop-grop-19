@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="oop2" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="Debug">
+				<Option output="bin/Debug/oop2" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Debug/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-g" />
+				</Compiler>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/oop2" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O2" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-Wall" />
+			<Add option="-fexceptions" />
+			<Add directory="C:/Program Files/CodeBlocks/MinGW/include/SDL3" />
+			<Add directory="C:/Program Files/CodeBlocks/MinGW/include/SDL3_ttf" />
+		</Compiler>
+		<Linker>
+			<Add library="C:/Program Files/CodeBlocks/MinGW/lib/libSDL3.dll.a" />
+			<Add library="C:/Program Files/CodeBlocks/MinGW/lib/libSDL3_test.a" />
+			<Add library="C:/Program Files/CodeBlocks/MinGW/lib/libSDL3_ttf.dll.a" />
+			<Add directory="C:/Program Files/CodeBlocks/MinGW/lib" />
+		</Linker>
+		<Unit filename="Page.h" />
+		<Unit filename="button.cpp" />
+		<Unit filename="button.h" />
+		<Unit filename="main.cpp" />
+		<Unit filename="menu.cpp" />
+		<Unit filename="menu.h" />
+		<Unit filename="newProject.cpp" />
+		<Unit filename="newProject.h" />
+		<Unit filename="openProject.cpp" />
+		<Unit filename="openProject.h" />
+		<Unit filename="projectManager.cpp" />
+		<Unit filename="projectManager.h" />
+		<Unit filename="textrenderer.cpp" />
+		<Unit filename="textrenderer.h" />
+		<Extensions />
+	</Project>
+</CodeBlocks_project_file>

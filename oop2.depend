@@ -1,0 +1,244 @@
+# depslib dependency file v1.0
+1785913588 source:d:\term\term8\oop\final\oop2\main.cpp
+	<SDL3/SDL.h>
+	"Page.h"
+	<iostream>
+	<SDL3_ttf/SDL_ttf.h>
+	"TextRenderer.h"
+	"Menu.h"
+	"NewProject.h"
+	"OpenProject.h"
+
+1785905430 d:\term\term8\oop\final\oop2\page.h
+
+1785899709 source:d:\term\term8\oop\final\oop2\button.cpp
+	"Button.h"
+
+1785899709 d:\term\term8\oop\final\oop2\button.h
+	<SDL3/SDL.h>
+
+1785908291 source:d:\term\term8\oop\final\oop2\textrenderer.cpp
+	"TextRenderer.h"
+	<iostream>
+
+1785910373 d:\term\term8\oop\final\oop2\textrenderer.h
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+
+1785911378 source:d:\term\term8\oop\final\oop2\menu.cpp
+	"Menu.h"
+	<SDL3/SDL.h>
+	<iostream>
+	"openProject.h"
+
+1785907215 d:\term\term8\oop\final\oop2\menu.h
+	<SDL3/SDL.h>
+	"Page.h"
+
+1785905954 d:\term\term8\oop\final\oop2\newproject.h
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+
+1785913351 source:d:\term\term8\oop\final\oop2\projectmanager.cpp
+	"ProjectManager.h"
+	<fstream>
+
+1785912281 d:\term\term8\oop\final\oop2\projectmanager.h
+	<string>
+	<vector>
+
+1785913338 source:d:\term\term8\oop\final\oop2\newproject.cpp
+	"NewProject.h"
+	"ProjectManager.h"
+	"TextRenderer.h"
+	<iostream>
+	<string>
+
+1785912409 d:\term\term8\oop\final\oop2\openproject.h
+	<SDL3/SDL.h>
+	<vector>
+	"ProjectManager.h"
+
+1785912409 source:d:\term\term8\oop\final\oop2\openproject.cpp
+	"OpenProject.h"
+	"TextRenderer.h"
+	<iostream>
+
+1785899709 source:d:\term\term8\oop\final\oop3\button.cpp
+	"Button.h"
+
+1785899709 d:\term\term8\oop\final\oop3\button.h
+	<SDL3/SDL.h>
+
+1786086392 source:d:\term\term8\oop\final\oop3\main.cpp
+	<SDL3/SDL.h>
+	"Page.h"
+	<iostream>
+	<SDL3_ttf/SDL_ttf.h>
+	"TextRenderer.h"
+	"Menu.h"
+	"NewProject.h"
+	"OpenProject.h"
+	"EditorPage.h"
+
+1786002317 d:\term\term8\oop\final\oop3\page.h
+
+1785910373 d:\term\term8\oop\final\oop3\textrenderer.h
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+
+1785907215 d:\term\term8\oop\final\oop3\menu.h
+	<SDL3/SDL.h>
+	"Page.h"
+
+1785905954 d:\term\term8\oop\final\oop3\newproject.h
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+
+1785912409 d:\term\term8\oop\final\oop3\openproject.h
+	<SDL3/SDL.h>
+	<vector>
+	"ProjectManager.h"
+
+1785912281 d:\term\term8\oop\final\oop3\projectmanager.h
+	<string>
+	<vector>
+
+1785911378 source:d:\term\term8\oop\final\oop3\menu.cpp
+	"Menu.h"
+	<SDL3/SDL.h>
+	<iostream>
+	"openProject.h"
+
+1785913338 source:d:\term\term8\oop\final\oop3\newproject.cpp
+	"NewProject.h"
+	"ProjectManager.h"
+	"TextRenderer.h"
+	<iostream>
+	<string>
+
+1785912409 source:d:\term\term8\oop\final\oop3\openproject.cpp
+	"OpenProject.h"
+	"TextRenderer.h"
+	<iostream>
+
+1785913351 source:d:\term\term8\oop\final\oop3\projectmanager.cpp
+	"ProjectManager.h"
+	<fstream>
+
+1785908291 source:d:\term\term8\oop\final\oop3\textrenderer.cpp
+	"TextRenderer.h"
+	<iostream>
+
+1786085689 source:d:\term\term8\oop\final\oop3\editormenu.cpp
+	"EditorMenu.h"
+	"TextRenderer.h"
+
+1786085689 d:\term\term8\oop\final\oop3\editormenu.h
+	<SDL3/SDL.h>
+
+1786086263 source:d:\term\term8\oop\final\oop3\editorpage.cpp
+	"EditorPage.h"
+
+1786086263 d:\term\term8\oop\final\oop3\editorpage.h
+	<SDL3/SDL.h>
+	"EditorMenu.h"
+	"SearchBox.h"
+
+1786086263 d:\term\term8\oop\final\oop3\searchbox.h
+	<SDL3/SDL.h>
+	<string>
+
+1786086263 source:d:\term\term8\oop\final\oop3\searchbox.cpp
+	"SearchBox.h"
+	"TextRenderer.h"
+
+1785899709 source:d:\term\term8\oop\final\github\button.cpp
+	"Button.h"
+
+1785899709 d:\term\term8\oop\final\github\button.h
+	<SDL3/SDL.h>
+
+1786085689 source:d:\term\term8\oop\final\github\editormenu.cpp
+	"EditorMenu.h"
+	"TextRenderer.h"
+
+1786085689 d:\term\term8\oop\final\github\editormenu.h
+	<SDL3/SDL.h>
+
+1785910373 d:\term\term8\oop\final\github\textrenderer.h
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+
+1786086263 source:d:\term\term8\oop\final\github\editorpage.cpp
+	"EditorPage.h"
+
+1786086263 d:\term\term8\oop\final\github\editorpage.h
+	<SDL3/SDL.h>
+	"EditorMenu.h"
+	"SearchBox.h"
+
+1786086263 d:\term\term8\oop\final\github\searchbox.h
+	<SDL3/SDL.h>
+	<string>
+
+1786086392 source:d:\term\term8\oop\final\github\main.cpp
+	<SDL3/SDL.h>
+	"Page.h"
+	<iostream>
+	<SDL3_ttf/SDL_ttf.h>
+	"TextRenderer.h"
+	"Menu.h"
+	"NewProject.h"
+	"OpenProject.h"
+	"EditorPage.h"
+
+1786002317 d:\term\term8\oop\final\github\page.h
+
+1785907215 d:\term\term8\oop\final\github\menu.h
+	<SDL3/SDL.h>
+	"Page.h"
+
+1785905954 d:\term\term8\oop\final\github\newproject.h
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+
+1785912409 d:\term\term8\oop\final\github\openproject.h
+	<SDL3/SDL.h>
+	<vector>
+	"ProjectManager.h"
+
+1785912281 d:\term\term8\oop\final\github\projectmanager.h
+	<string>
+	<vector>
+
+1785911378 source:d:\term\term8\oop\final\github\menu.cpp
+	"Menu.h"
+	<SDL3/SDL.h>
+	<iostream>
+	"openProject.h"
+
+1785913338 source:d:\term\term8\oop\final\github\newproject.cpp
+	"NewProject.h"
+	"ProjectManager.h"
+	"TextRenderer.h"
+	<iostream>
+	<string>
+
+1785912409 source:d:\term\term8\oop\final\github\openproject.cpp
+	"OpenProject.h"
+	"TextRenderer.h"
+	<iostream>
+
+1785913351 source:d:\term\term8\oop\final\github\projectmanager.cpp
+	"ProjectManager.h"
+	<fstream>
+
+1786086263 source:d:\term\term8\oop\final\github\searchbox.cpp
+	"SearchBox.h"
+	"TextRenderer.h"
+
+1785908291 source:d:\term\term8\oop\final\github\textrenderer.cpp
+	"TextRenderer.h"
+	<iostream>
+

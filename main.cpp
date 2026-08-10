@@ -11,6 +11,7 @@
 #include "NewProject.h"
 #include "OpenProject.h"
 #include "EditorPage.h"
+
 Page CurrentPage = HOME_PAGE;
 TTF_Font* font = nullptr;
 SDL_Window* window = nullptr;
@@ -26,9 +27,7 @@ EditorPage* editor = nullptr;
 //----------------------
 void DrawHomePage(SDL_Renderer* renderer);
 
-
-
-int main(int argc,char* argv[])
+int main(int argc, char* argv[])
 {
     if (!SDL_Init(SDL_INIT_VIDEO))
     {
@@ -37,15 +36,18 @@ int main(int argc,char* argv[])
     }
     if(!TTF_Init())
     {
-        std::cout<<"TTF Error"<<std::endl;
+        std::cout << "TTF Error" << std::endl;
         return -1;
     }
-    TextRenderer::Init("Fonts/arial.ttf",18);
+
+    TextRenderer::Init("Fonts/arial.ttf", 18);
     LoadProjects();
+
     if(!font)
     {
-        std::cout<<"Font Error"<<std::endl;
+        std::cout << "Font Error" << std::endl;
     }
+
     window = SDL_CreateWindow(
         "Proteus Clone",
         950,
@@ -55,15 +57,10 @@ int main(int argc,char* argv[])
 
     if(!window)
     {
-        std::cout
-            << "Window Error: "
-            << SDL_GetError()
-            << std::endl;
-
+        std::cout << "Window Error: " << SDL_GetError() << std::endl;
         SDL_Quit();
         return -1;
     }
-
 
     // حالا که Window ساخته شده
     editor = new EditorPage(window);
@@ -76,330 +73,242 @@ int main(int argc,char* argv[])
         SDL_Quit();
         return -1;
     }
-    SDL_Color color = {0,0,0,255};
-    txtFile = TextRenderer::CreateText(renderer,"File",color);
-    txtNew  = TextRenderer::CreateText(renderer,"New Project",color);
-    txtOpen = TextRenderer::CreateText(renderer,"Open Project",color);
-    bool running=true;
 
+    SDL_Color color = {0, 0, 0, 255};
+    txtFile = TextRenderer::CreateText(renderer, "File", color);
+    txtNew  = TextRenderer::CreateText(renderer, "New Project", color);
+    txtOpen = TextRenderer::CreateText(renderer, "Open Project", color);
+
+    bool running = true;
     SDL_Event event;
 
     while(running)
     {
         while(SDL_PollEvent(&event))
         {
+            // --------------------------------
+            // 1. خروج از برنامه و Auto-Save
+            // --------------------------------
             if(event.type == SDL_EVENT_QUIT)
             {
+                // سیو خودکار هنگام بسته شدن برنامه
+                // سیو خودکار هنگام بسته شدن برنامه
+                if (CurrentPage == EDITOR_PAGE && !currentProject.path.empty() && editor != nullptr)
+                {
+                    editor->SaveWorkspace(currentProject.path);
+                    SaveProject(currentProject);
+                    std::cout << "Project Auto-Saved before exiting!" << std::endl;
+                }
                 running = false;
             }
 
-
-            //--------------------------------
-            // Mouse
-            //--------------------------------
-
-            if(event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+            // --------------------------------
+            // 2. کلیک موس
+            // --------------------------------
+            else if(event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
             {
                 int x = event.button.x;
                 int y = event.button.y;
 
-
                 if(CurrentPage == HOME_PAGE)
                 {
-                    HandleMenuClick(x,y);
+                    HandleMenuClick(x, y);
 
-
-                    std::vector<Project> list =
-                        GetRecentProjects();
-
-
-                    for(int i = 0;
-                        i < (int)list.size() && i < 10;
-                        i++)
+                    std::vector<Project> list = GetRecentProjects();
+                    for(int i = 0; i < (int)list.size() && i < 10; i++)
                     {
                         int yPos = 120 + i * 45;
-
-
-                        if(x >= 100 &&
-                           x <= 500 &&
-                           y >= yPos &&
-                           y <= yPos + 35)
+                        if(x >= 100 && x <= 500 && y >= yPos && y <= yPos + 35)
                         {
+                            // ---------------------------------------------------------
+                            // ذخیره پروژه قبلی اگر از ادیتور به صفحه اصلی آمده‌ایم
+                            // ---------------------------------------------------------
+                            if (editor != nullptr && !currentProject.path.empty()) {
+                                editor->SaveWorkspace(currentProject.path);
+                                SaveProject(currentProject);
+                            }
+                            // ---------------------------------------------------------
+
                             selectedProjectIndex = i;
-
                             currentProject = list[i];
-
 
                             if(OpenProject(currentProject))
                             {
+                                if (editor) {
+                                    editor->LoadWorkspace(currentProject.path);
+                                }
                                 CurrentPage = EDITOR_PAGE;
                             }
-
                             break;
                         }
                     }
                 }
-
-
                 else if(CurrentPage == NEW_PROJECT_PAGE)
                 {
-                    HandleNewProjectClick(x,y);
+                    HandleNewProjectClick(x, y);
                 }
-
-
                 else if(CurrentPage == OPEN_PROJECT_PAGE)
                 {
-                    HandleOpenProjectClick(x,y);
+                    HandleOpenProjectClick(x, y);
                 }
-
-
                 else if(CurrentPage == EDITOR_PAGE)
                 {
-                    EditorMenuAction action =
-                        editor->HandleClick(x,y);
-
+                    EditorMenuAction action = editor->HandleClick(x, y);
 
                     if(action == EDITOR_NEW_PROJECT)
                     {
                         CurrentPage = NEW_PROJECT_PAGE;
-
                         SDL_StartTextInput(window);
                     }
-
                     else if(action == EDITOR_OPEN_PROJECT)
                     {
                         CurrentPage = OPEN_PROJECT_PAGE;
                     }
-
                     else if(action == EDITOR_SAVE_PROJECT)
                     {
                         SaveProject(currentProject);
+                        // چک کردن اینکه آیا مسیر خالی نیست
+                        if (!currentProject.path.empty())
+                        {
+                            editor->SaveWorkspace(currentProject.path);
+                            std::cout << "Project Overwritten & Saved: " << currentProject.path << std::endl;
+                        }
+                        else
+                        {
+                            CurrentPage = SAVE_AS_PAGE;
+                        }
                     }
-
                     else if(action == EDITOR_SAVE_AS)
                     {
                         CurrentPage = SAVE_AS_PAGE;
                     }
-                    if (CurrentPage == EDITOR_PAGE) {
-                        editor->HandleMouseMotion(event.motion.x, event.motion.y);
-                    }
                 }
-
-
                 else if(CurrentPage == SAVE_AS_PAGE)
                 {
-                   HandleSaveAsClick(x,y);
+                   HandleSaveAsClick(x, y);
                 }
             }
 
-
-            //--------------------------------
-            // Keyboard
-            //--------------------------------
-
-            if(CurrentPage == NEW_PROJECT_PAGE)
+            // --------------------------------
+            // 3. حرکت موس (برای سایه زدن قطعات)
+            // --------------------------------
+            else if (event.type == SDL_EVENT_MOUSE_MOTION)
             {
-                HandleKeyboard(event);
+                if (CurrentPage == EDITOR_PAGE && editor != nullptr)
+                {
+                    editor->HandleMouseMotion(event.motion.x, event.motion.y);
+                }
             }
 
-
-            if(CurrentPage == EDITOR_PAGE)
+            // --------------------------------
+            // 4. کیبورد (تایپ و دکمه‌ها)
+            // --------------------------------
+            else if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_TEXT_INPUT)
             {
-                editor->HandleKeyboard(event);
+                if(CurrentPage == NEW_PROJECT_PAGE)
+                {
+                    HandleKeyboard(event);
+                }
+                else if(CurrentPage == EDITOR_PAGE)
+                {
+                    editor->HandleKeyboard(event);
+                }
+                else if(CurrentPage == SAVE_AS_PAGE)
+                {
+                    HandleSaveAsKeyboard(event);
+                }
             }
+        } // پایان while(SDL_PollEvent)
 
-
-            if(CurrentPage == SAVE_AS_PAGE)
-            {
-                HandleSaveAsKeyboard(event);
-            }
-        }
-        SDL_SetRenderDrawColor(renderer,225,225,225,255);
+        // رندر کردن صفحات
+        SDL_SetRenderDrawColor(renderer, 225, 225, 225, 255);
         SDL_RenderClear(renderer);
 
-
-
-        // سپس صفحه جاری را رسم کن
-            switch(CurrentPage)
-            {
-                case HOME_PAGE:
-                    DrawHomePage(renderer);
-                    break;
-
-
-
-                case NEW_PROJECT_PAGE:
-                    DrawNewProject(renderer);
-                    break;
-
-
-
-                case OPEN_PROJECT_PAGE:
+        switch(CurrentPage)
+        {
+            case HOME_PAGE:
+                DrawHomePage(renderer);
+                break;
+            case NEW_PROJECT_PAGE:
+                DrawNewProject(renderer);
+                break;
+            case OPEN_PROJECT_PAGE:
                 DrawOpenProject(renderer);
                 break;
-
-
-
-                case EDITOR_PAGE:
-                    editor->Draw(renderer);
-                    break;
-                case SAVE_AS_PAGE:
-                    DrawSaveAsPage(renderer);
-                    break;
-
-            }
-
-    // منو روی صفحه
-    if(CurrentPage == HOME_PAGE)
-    {
-        DrawMenu(renderer);
-    }
-
-
-    SDL_RenderPresent(renderer);
+            case EDITOR_PAGE:
+                editor->Draw(renderer);
+                break;
+            case SAVE_AS_PAGE:
+                DrawSaveAsPage(renderer);
+                break;
         }
+
+        if(CurrentPage == HOME_PAGE)
+        {
+            DrawMenu(renderer);
+        }
+
+        SDL_RenderPresent(renderer);
+    } // پایان حلقه بازی
+
+    // آزادسازی حافظه
     SDL_DestroyTexture(txtFile);
     SDL_DestroyTexture(txtNew);
     SDL_DestroyTexture(txtOpen);
 
     TTF_CloseFont(font);
-
     TextRenderer::Close();
 
+    if (editor) delete editor; // جلوگیری از Memory Leak
+
     SDL_DestroyRenderer(renderer);
-
     SDL_DestroyWindow(window);
-
     SDL_Quit();
 
     return 0;
 }
 
 //--------------------------------------------------
-
 void DrawHomePage(SDL_Renderer* renderer)
 {
+    SDL_SetRenderDrawColor(renderer, 240, 240, 240, 255);
+    SDL_FRect rect = { 0, 30, 950, 570 };
+    SDL_RenderFillRect(renderer, &rect);
 
-    SDL_SetRenderDrawColor(renderer,
-                           240,
-                           240,
-                           240,
-                           255);
-
-
-    SDL_FRect rect =
-    {
-        0,
-        30,
-        950,
-        570
-    };
-
-    SDL_RenderFillRect(renderer,&rect);
-
-
-
-    // عنوان
-
-    SDL_Color color={0,0,0,255};
-
-
-    SDL_Texture* title =
-    TextRenderer::CreateText(renderer,
-                             "Recent Projects",
-                             color);
-
-
+    SDL_Color color = {0, 0, 0, 255};
+    SDL_Texture* title = TextRenderer::CreateText(renderer, "Recent Projects", color);
 
     if(title)
     {
-        SDL_FRect pos=
-        {
-            100,
-            70,
-            200,
-            25
-        };
-
-
-        SDL_RenderTexture(renderer,
-                          title,
-                          NULL,
-                          &pos);
-
-
+        SDL_FRect pos = { 100, 70, 200, 25 };
+        SDL_RenderTexture(renderer, title, NULL, &pos);
         SDL_DestroyTexture(title);
     }
 
+    std::vector<Project> list = GetRecentProjects();
 
-
-    //-------------------------
-    // نمایش 5 پروژه آخر
-    //-------------------------
-
-
-    std::vector<Project> list =
-        GetRecentProjects();
-
-
-
-    for(int i=0;i<list.size();i++)
+    for(int i = 0; i < (int)list.size(); i++)
     {
+        SDL_SetRenderDrawColor(renderer, 210, 210, 210, 255);
 
+        // در اینجا عبارت float اضافه شد تا هشدار برطرف شود
+        SDL_FRect box = { 100, (float)(120 + i * 45), 400, 35 };
+        SDL_RenderFillRect(renderer, &box);
 
-        SDL_SetRenderDrawColor(renderer,
-                               210,
-                               210,
-                               210,
-                               255);
-
-
-
-        SDL_FRect box=
-        {
-            100,
-            120+i*45,
-            400,
-            35
-        };
-
-
-        SDL_RenderFillRect(renderer,&box);
-
-
-
-        SDL_Texture* txt =
-        TextRenderer::CreateText(renderer,
-                                 list[i].name.c_str(),
-                                 color);
-
-
+        SDL_Texture* txt = TextRenderer::CreateText(renderer, list[i].name.c_str(), color);
 
         if(txt)
         {
-
-            SDL_FRect tpos=
-            {
-                120,
-                130+i*45,
-                250,
-                20
-            };
-
-
-            SDL_RenderTexture(renderer,
-                              txt,
-                              NULL,
-                              &tpos);
-
-
-
+            // در اینجا هم عبارت float اضافه شد
+            SDL_FRect tpos = { 120, (float)(130 + i * 45), 250, 20 };
+            SDL_RenderTexture(renderer, txt, NULL, &tpos);
             SDL_DestroyTexture(txt);
         }
-
     }
-
 }
+//--------------------------------------------------
+
+
 void DrawOpenProjectPage(SDL_Renderer* renderer)
 {
     SDL_SetRenderDrawColor(renderer,180,180,230,255);

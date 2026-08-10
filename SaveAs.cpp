@@ -2,7 +2,7 @@
 #include "TextRenderer.h"
 #include "ProjectManager.h"
 #include "Page.h"
-
+#include "EditorPage.h"
 #include <iostream>
 #include <string>
 
@@ -172,15 +172,11 @@ void HandleSaveAsClick(int x, int y)
     //--------------------------------
     // Save Button
     //--------------------------------
-    if(x >= 100 && x <= 250 && y >= 210 && y <= 255)
+    if(x >= 100 && x <= 250 && y >= 210 && y <= 255) // دکمه Save
     {
-        // 1. باز کردن پنجره استاندارد ویندوز
         std::string fullPath = OpenNativeSaveAsDialog();
-
-        // 2. بررسی اینکه آیا کاربر فایلی انتخاب کرده یا Cancel زده است
         if (!fullPath.empty())
         {
-            // استخراج فقط نام فایل از مسیر طولانی (اختیاری - برای نمایش)
             size_t lastSlash = fullPath.find_last_of("\\/");
             if(lastSlash != std::string::npos) {
                 currentProject.name = fullPath.substr(lastSlash + 1);
@@ -188,21 +184,17 @@ void HandleSaveAsClick(int x, int y)
                 currentProject.name = fullPath;
             }
 
-            // TODO: در فایل ProjectManager.cpp خودتان، باید مسیر 'fullPath' را به عنوان
-            // محل دقیق ساخت فایل استفاده کنید.
-
-            // اینجا فرض می‌کنیم متغیری به نام path به کلاس Project اضافه کرده‌اید
-            // currentProject.path = fullPath;
+            // *** تغییر بسیار مهم: ذخیره مسیر کامل ***
+            currentProject.path = fullPath;
 
             SaveProjectAs(currentProject);
 
-            std::cout << "Project Saved Successfully at: " << fullPath << std::endl;
+            extern EditorPage* editor;
+            if (editor) editor->SaveWorkspace(currentProject.path); // حتما از path استفاده شود
 
             saveAsTyping = false;
-            SDL_StopTextInput(window);
-            CurrentPage = EDITOR_PAGE; // بازگشت به محیط کار
+            CurrentPage = EDITOR_PAGE;
         }
-
         return;
     }
 

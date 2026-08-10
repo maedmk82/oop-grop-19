@@ -440,6 +440,9 @@ void HandleNewProjectClick(int x, int y)
     //-----------------------------------------
     // Create Button
     //-----------------------------------------
+    //-----------------------------------------
+    // Create Button
+    //-----------------------------------------
     if(x >= 350 && x <= 530 && y >= 400 && y <= 450)
     {
         if(selectedPageSize == 0) {
@@ -452,36 +455,36 @@ void HandleNewProjectClick(int x, int y)
             return;
         }
 
-        //-------------------------------------
+        // ---------------------------------------------------------
+        // ویژگی جدید: سیو کردن پروژه قبلی قبل از ساختن پروژه جدید
+        // ---------------------------------------------------------
+        if (editor != nullptr && !currentProject.path.empty()) {
+            editor->SaveWorkspace(currentProject.path);
+            SaveProject(currentProject);
+        }
+        // ---------------------------------------------------------
+
         // Create Project
-        //-------------------------------------
         Project p;
         p.name = projectName;
-        p.path = projectPath + projectName + "/";
+
+        // مسیر فایل (طبق اصلاحات قبلی باید فرمت .pro داشته باشد)
+        p.path = projectPath + projectName + ".pro";
 
         if(selectedPageSize == 3)
             p.pageSize = "A3";
         else
             p.pageSize = "A4";
 
-        // ذخیره پروژه در فایل‌ها
         SaveProject(p);
-
-        // تنظیم به عنوان پروژه فعلی
         currentProject = p;
 
-        // *** قسمت مهم: پاک کردن صفحه ادیتور از قطعات پروژه قبلی ***
         if (editor) {
             editor->ClearWorkspace();
         }
 
-        // توقف تایپ کیبورد
         SDL_StopTextInput(window);
-
-        // نام پروژه بعد از ساخت پاک شود تا دفعه بعد خالی باشد (اختیاری)
         projectName = "";
-
-        // رفتن به Editor
         CurrentPage = EDITOR_PAGE;
 
         std::cout << "Project Created & Saved : " << p.name << std::endl;

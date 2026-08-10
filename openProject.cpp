@@ -111,6 +111,10 @@ void DrawOpenProject(SDL_Renderer* renderer)
 // Click on Project
 //--------------------------------------------------
 
+//--------------------------------------------------
+// Click on Project
+//--------------------------------------------------
+
 void HandleOpenProjectClick(int x, int y)
 {
     // ۱. بررسی کلیک روی دکمه Browse Computer
@@ -120,6 +124,15 @@ void HandleOpenProjectClick(int x, int y)
 
         if(!fullPath.empty())
         {
+            // ---------------------------------------------------------
+            // ویژگی جدید: ذخیره خودکار پروژه قبلی (قبل از باز کردن فایل جدید)
+            // ---------------------------------------------------------
+            if (editor != nullptr && !currentProject.path.empty()) {
+                editor->SaveWorkspace(currentProject.path);
+                SaveProject(currentProject);
+            }
+            // ---------------------------------------------------------
+
             size_t lastSlash = fullPath.find_last_of("\\/");
             if(lastSlash != std::string::npos) {
                 currentProject.name = fullPath.substr(lastSlash + 1);
@@ -127,13 +140,13 @@ void HandleOpenProjectClick(int x, int y)
                 currentProject.name = fullPath;
             }
 
+            currentProject.path = fullPath;
+
             if(OpenProject(currentProject))
             {
-                // *** پاک کردن صفحه قبل از ورود به ادیتور ***
                 if (editor) {
-                    editor->ClearWorkspace();
+                    editor->LoadWorkspace(currentProject.path);
                 }
-
                 CurrentPage = EDITOR_PAGE;
                 std::cout << "Opened From Computer: " << fullPath << std::endl;
             }
@@ -150,16 +163,23 @@ void HandleOpenProjectClick(int x, int y)
 
         if(x >= 100 && x <= 600 && y >= yPos && y <= yPos + 35)
         {
+            // ---------------------------------------------------------
+            // ویژگی جدید: ذخیره خودکار پروژه قبلی (قبل از باز کردن فایل جدید)
+            // ---------------------------------------------------------
+            if (editor != nullptr && !currentProject.path.empty()) {
+                editor->SaveWorkspace(currentProject.path);
+                SaveProject(currentProject);
+            }
+            // ---------------------------------------------------------
+
             selectedProjectIndex = i;
             currentProject = projects[i];
 
             if(OpenProject(currentProject))
             {
-                // *** پاک کردن صفحه قبل از ورود به ادیتور ***
                 if (editor) {
-                    editor->ClearWorkspace();
+                    editor->LoadWorkspace(currentProject.path);
                 }
-
                 CurrentPage = EDITOR_PAGE;
             }
 

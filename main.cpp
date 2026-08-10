@@ -1,7 +1,11 @@
 #include <SDL3/SDL.h>
-#include "Page.h"
-#include <iostream>
 #include <SDL3_ttf/SDL_ttf.h>
+
+#include <iostream>
+#include <vector>
+#include "SaveAs.h"
+#include "Page.h"
+#include "ProjectManager.h"
 #include "TextRenderer.h"
 #include "Menu.h"
 #include "NewProject.h"
@@ -14,6 +18,7 @@ SDL_Texture* txtFile = nullptr;
 SDL_Texture* txtNew = nullptr;
 SDL_Texture* txtOpen = nullptr;
 int selectedProjectIndex = -1;
+Project currentProject;
 EditorPage* editor = nullptr;
 
 //----------------------
@@ -42,18 +47,26 @@ int main(int argc,char* argv[])
         std::cout<<"Font Error"<<std::endl;
     }
     window = SDL_CreateWindow(
-    "Proteus Clone",
-    950,
-    600,
-    0);
-    editor = new EditorPage(window);
+        "Proteus Clone",
+        950,
+        600,
+        0
+    );
 
-    if (!window)
+    if(!window)
     {
-        std::cout << "Window Error: " << SDL_GetError() << std::endl;
+        std::cout
+            << "Window Error: "
+            << SDL_GetError()
+            << std::endl;
+
         SDL_Quit();
         return -1;
     }
+
+
+    // حالا که Window ساخته شده
+    editor = new EditorPage(window);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
 
     if (!renderer)
@@ -77,50 +90,54 @@ int main(int argc,char* argv[])
         {
             if(event.type == SDL_EVENT_QUIT)
             {
-                running=false;
+                running = false;
             }
 
 
-            // کلیک موس
+            //--------------------------------
+            // Mouse
+            //--------------------------------
+
             if(event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
             {
-
                 int x = event.button.x;
                 int y = event.button.y;
 
 
                 if(CurrentPage == HOME_PAGE)
                 {
-
                     HandleMenuClick(x,y);
 
 
-                    std::vector<Project> list = GetRecentProjects();
+                    std::vector<Project> list =
+                        GetRecentProjects();
 
 
-                    for(int i=0;i<list.size();i++)
+                    for(int i = 0;
+                        i < (int)list.size() && i < 10;
+                        i++)
                     {
+                        int yPos = 120 + i * 45;
 
-                        int yPos = 120 + i*45;
 
-
-                        if(x>=100 && x<=500 &&
-                           y>=yPos && y<=yPos+35)
+                        if(x >= 100 &&
+                           x <= 500 &&
+                           y >= yPos &&
+                           y <= yPos + 35)
                         {
+                            selectedProjectIndex = i;
 
-                            selectedProjectIndex=i;
-
-                            CurrentPage = EDITOR_PAGE;
+                            currentProject = list[i];
 
 
-                            std::cout<<"Opening Project : "
-                                     <<list[i].name
-                                     <<std::endl;
+                            if(OpenProject(currentProject))
+                            {
+                                CurrentPage = EDITOR_PAGE;
+                            }
 
                             break;
                         }
                     }
-
                 }
 
 
@@ -138,23 +155,65 @@ int main(int argc,char* argv[])
 
                 else if(CurrentPage == EDITOR_PAGE)
                 {
-                    editor->HandleClick(x,y);
+                    EditorMenuAction action =
+                        editor->HandleClick(x,y);
+
+
+                    if(action == EDITOR_NEW_PROJECT)
+                    {
+                        CurrentPage = NEW_PROJECT_PAGE;
+
+                        SDL_StartTextInput(window);
+                    }
+
+                    else if(action == EDITOR_OPEN_PROJECT)
+                    {
+                        CurrentPage = OPEN_PROJECT_PAGE;
+                    }
+
+                    else if(action == EDITOR_SAVE_PROJECT)
+                    {
+                        SaveProject(currentProject);
+                    }
+
+                    else if(action == EDITOR_SAVE_AS)
+                    {
+                        CurrentPage = SAVE_AS_PAGE;
+                    }
+                    if (CurrentPage == EDITOR_PAGE) {
+                        editor->HandleMouseMotion(event.motion.x, event.motion.y);
+                    }
                 }
 
+
+                else if(CurrentPage == SAVE_AS_PAGE)
+                {
+                   HandleSaveAsClick(x,y);
+                }
             }
 
-        }
 
+            //--------------------------------
+            // Keyboard
+            //--------------------------------
 
-            // تایپ کیبورد
             if(CurrentPage == NEW_PROJECT_PAGE)
             {
                 HandleKeyboard(event);
             }
+
+
             if(CurrentPage == EDITOR_PAGE)
             {
                 editor->HandleKeyboard(event);
             }
+
+
+            if(CurrentPage == SAVE_AS_PAGE)
+            {
+                HandleSaveAsKeyboard(event);
+            }
+        }
         SDL_SetRenderDrawColor(renderer,225,225,225,255);
         SDL_RenderClear(renderer);
 
@@ -164,33 +223,28 @@ int main(int argc,char* argv[])
             switch(CurrentPage)
             {
                 case HOME_PAGE:
-
                     DrawHomePage(renderer);
-
                     break;
 
 
 
                 case NEW_PROJECT_PAGE:
-
                     DrawNewProject(renderer);
-
                     break;
 
 
 
                 case OPEN_PROJECT_PAGE:
-
-                    DrawOpenProject(renderer);
-
-                    break;
+                DrawOpenProject(renderer);
+                break;
 
 
 
                 case EDITOR_PAGE:
-
                     editor->Draw(renderer);
-
+                    break;
+                case SAVE_AS_PAGE:
+                    DrawSaveAsPage(renderer);
                     break;
 
             }

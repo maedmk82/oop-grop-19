@@ -481,6 +481,16 @@ void HandleNewProjectClick(int x, int y)
 
         if (editor) {
             editor->ClearWorkspace();
+            editor->pageSize = p.pageSize; // <--- تنظیم سایز در ادیتور
+        }
+
+        // *** دستورِ فیزیکی برای تغییر سایز و وسط‌چین کردن پنجره ***
+        if (p.pageSize == "A3") {
+            SDL_SetWindowSize(window, 1350, 800);
+            SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        } else {
+            SDL_SetWindowSize(window, 950, 600);
+            SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
         }
 
         SDL_StopTextInput(window);

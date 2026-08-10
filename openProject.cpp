@@ -11,7 +11,7 @@
 
 #include <windows.h>
 #include <commdlg.h>
-
+extern SDL_Window* window;
 extern int selectedProjectIndex;
 extern Project currentProject;
 extern Page CurrentPage;
@@ -145,8 +145,19 @@ void HandleOpenProjectClick(int x, int y)
             if(OpenProject(currentProject))
             {
                 if (editor) {
+                    editor->pageSize = currentProject.pageSize; // <--- تنظیم سایز
                     editor->LoadWorkspace(currentProject.path);
                 }
+
+                // *** تغییر سایز پنجره ***
+                if (currentProject.pageSize.find("A3") != std::string::npos) {
+                    SDL_SetWindowSize(window, 1350, 800);
+                    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                } else {
+                    SDL_SetWindowSize(window, 950, 600);
+                    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                }
+
                 CurrentPage = EDITOR_PAGE;
                 std::cout << "Opened From Computer: " << fullPath << std::endl;
             }
@@ -178,8 +189,19 @@ void HandleOpenProjectClick(int x, int y)
             if(OpenProject(currentProject))
             {
                 if (editor) {
+                    editor->pageSize = currentProject.pageSize; // <--- تنظیم سایز
                     editor->LoadWorkspace(currentProject.path);
                 }
+
+                // *** تغییر سایز پنجره ***
+                if (currentProject.pageSize.find("A3") != std::string::npos) {
+                    SDL_SetWindowSize(window, 1350, 800);
+                    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                } else {
+                    SDL_SetWindowSize(window, 950, 600);
+                    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                }
+
                 CurrentPage = EDITOR_PAGE;
             }
 

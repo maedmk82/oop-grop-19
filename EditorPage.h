@@ -42,11 +42,13 @@ private:
 
 public:
     EditorPage(SDL_Window* window);
-
+    std::string pageSize = "A4"; // متغیر جدید برای نگهداری سایز صفحه
     void ClearWorkspace();
     void SaveWorkspace(const std::string& filepath);
     void LoadWorkspace(const std::string& filepath);
     void Draw(SDL_Renderer* renderer);
+    bool exportRequested = false;
+    void ExportToImage(SDL_Renderer* renderer);
     EditorMenuAction HandleClick(int x, int y);
     void HandleMouseMotion(int x, int y);
     void HandleKeyboard(SDL_Event event);

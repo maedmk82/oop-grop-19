@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+
 // در صورتی که TextRenderer دارید آن را اینکلود کنید تا نام قطعات روی دکمه‌ها نوشته شود
 // #include "TextRenderer.h"
 
@@ -133,16 +134,49 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     // همیشه فیلتر را قبل از رسم آپدیت کن تا با تایپ کاربر لیست سریع تغییر کند
     UpdateSearchFilter();
 
+    // ------------------------------------
+    // رسم صفحه شطرنجی (Grid) با ابعاد پویا (A3 یا A4)
+    // ------------------------------------
+    bool isA3 = (pageSize.find("A3") != std::string::npos);
+
+    float gridMaxX = isA3 ? 1350.0f : 950.0f;
+    float gridMaxY = isA3 ? 800.0f : 600.0f;
+
+    // پس‌زمینه کل پنجره بر اساس سایز جدید
     SDL_SetRenderDrawColor(renderer, 245, 245, 245, 255);
-    SDL_FRect area = { 0, 0, 950, 600 };
+    SDL_FRect area = { 0, 0, gridMaxX, gridMaxY };
     SDL_RenderFillRect(renderer, &area);
 
-    DrawGrid(renderer);
+    // ۱. رسم پس‌زمینه سفید برای ناحیه کاغذ
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_FRect paperRect = { 100, 50, gridMaxX - 100, gridMaxY - 50 };
+    SDL_RenderFillRect(renderer, &paperRect);
 
+    // ۲. رسم خطوط شبکه شطرنجی
+    SDL_SetRenderDrawColor(renderer, 225, 225, 225, 255);
+    for(float x = 100; x <= gridMaxX; x += 20) {
+        SDL_RenderLine(renderer, x, 50, x, gridMaxY);
+    }
+    for(float y = 50; y <= gridMaxY; y += 20) {
+        SDL_RenderLine(renderer, 100, y, gridMaxX, y);
+    }
+
+    // =========================================================
+    // حلقه رسم قطعات
+    // =========================================================
     for (auto& comp : components) {
         comp->Update();
         comp->Draw(renderer);
+
+        // تست خطایابی: رسم یک مربع قرمز پشت هر قطعه برای اطمینان
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_FRect debugBox = { comp->x, comp->y, 20, 20 };
+
+        // نام تابع در SDL3 اصلاح شد
+        SDL_RenderRect(renderer, &debugBox);
     }
+    // =========================================================
+    // =========================================================
 
     // رسم سایه (Ghosting) قطعه هنگام قرار دادن
     if (isPlacingMode && currentMouseX >= 100 && currentMouseY >= 50) {
@@ -150,7 +184,7 @@ void EditorPage::Draw(SDL_Renderer* renderer)
         float snapY = std::round(currentMouseY / 20.0f) * 20.0f;
 
         SDL_SetRenderDrawColor(renderer, 0, 200, 0, 120);
-        SDL_FRect ghostRect = { snapX, snapY, 60, 40 }; // سایز تقریبی قطعه
+        SDL_FRect ghostRect = { snapX, snapY, 60, 40 };
         SDL_RenderFillRect(renderer, &ghostRect);
     }
 
@@ -158,6 +192,7 @@ void EditorPage::Draw(SDL_Renderer* renderer)
 
     menu.Draw(renderer);
     search.Draw(renderer);
+
     // ------------------------------------
     // رسم دکمه Undo در بالای صفحه
     // ------------------------------------
@@ -192,7 +227,33 @@ void EditorPage::Draw(SDL_Renderer* renderer)
         SDL_RenderTexture(renderer, txtRedo, NULL, &posR);
         SDL_DestroyTexture(txtRedo);
     }
-}
+
+    // ------------------------------------
+    // رسم دکمه Export Image در بالای صفحه
+    // ------------------------------------
+    SDL_SetRenderDrawColor(renderer, 200, 255, 200, 255); // رنگ سبز ملایم
+    SDL_FRect exportBtn = { 630, 10, 120, 30 };
+    SDL_RenderFillRect(renderer, &exportBtn);
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &exportBtn); // حاشیه
+
+    SDL_Texture* txtExport = TextRenderer::CreateText(renderer, "Export Image", black);
+    if (txtExport) {
+        SDL_FRect posE = { 635, 15, 110, 20 };
+        SDL_RenderTexture(renderer, txtExport, NULL, &posE);
+        SDL_DestroyTexture(txtExport);
+    }
+
+    // ------------------------------------
+    // عملیات گرفتن عکس (باید در انتهای تابع Draw باشد)
+    // ------------------------------------
+    if (exportRequested) {
+        ExportToImage(renderer);
+        exportRequested = false;
+    }
+} // <--- این آکولادِ پایانِ تابع Draw است
+
 
 //-----------------------------------------
 // Mouse & Keyboard
@@ -206,6 +267,11 @@ EditorMenuAction EditorPage::HandleClick(int x, int y)
     // بررسی کلیک روی منوی بالا و سرچ باکس
     EditorMenuAction action = menu.HandleClick(x, y);
     search.HandleClick(x, y);
+    // بررسی کلیک روی دکمه Export Image
+    if (x >= 630 && x <= 750 && y >= 10 && y <= 40) {
+        exportRequested = true; // روشن کردن پرچم برای گرفتن عکس
+        return (EditorMenuAction)0;
+    }
     // بررسی کلیک روی Undo
     if (x >= 450 && x <= 530 && y >= 10 && y <= 40) {
         Undo();
@@ -231,79 +297,93 @@ EditorMenuAction EditorPage::HandleClick(int x, int y)
     }
 
     // ۲. قرار دادن قطعه روی شبکه با کلیک روی صفحه (بخش کامل شده)
+    // =================================================================
+    // بخش جای‌گذاری قطعات روی صفحه (مجهز به سیستم خطایابی)
+    // =================================================================
     if (isPlacingMode && x >= 100 && y >= 50) {
-        // محاسبه مختصات برای Snap to Grid (چسبیدن به خطوط شبکه)
+
+        std::cout << "--- Trying to place component! ---" << std::endl;
+
+        // محاسبه مختصات برای Snap to Grid
         float snapX = std::round(x / 20.0f) * 20.0f;
         float snapY = std::round(y / 20.0f) * 20.0f;
 
-        // ========================================================
-        // ذخیره وضعیت فعلی برای Undo (فقط همین یک خط کافی است!)
-        // این کار قبل از اضافه شدن قطعه جدید انجام می‌شود
-        // ========================================================
+        // ذخیره وضعیت برای Undo
         SaveCurrentStateForUndo();
+
+        bool placed = false; // پرچم بررسی موفقیت
 
         // --- منابع اصلی ---
         if (selectedTool == ComponentType::GND) {
-            components.push_back(std::make_unique<GNDComponent>(snapX, snapY));
+            components.push_back(std::make_unique<GNDComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::DC_SOURCE) {
-            components.push_back(std::make_unique<DCSourceComponent>(snapX, snapY));
+            components.push_back(std::make_unique<DCSourceComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::BATTERY) {
-            components.push_back(std::make_unique<BatteryComponent>(snapX, snapY));
+            components.push_back(std::make_unique<BatteryComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::CLOCK) {
-            components.push_back(std::make_unique<ClockComponent>(snapX, snapY));
+            components.push_back(std::make_unique<ClockComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::LOGIC_STATE) {
-            components.push_back(std::make_unique<LogicStateComponent>(snapX, snapY));
+            components.push_back(std::make_unique<LogicStateComponent>(snapX, snapY)); placed = true;
         }
         // --- قطعات غیرفعال ---
         else if (selectedTool == ComponentType::RESISTOR) {
-            components.push_back(std::make_unique<ResistorComponent>(snapX, snapY));
+            components.push_back(std::make_unique<ResistorComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::CAPACITOR) {
-            components.push_back(std::make_unique<CapacitorComponent>(snapX, snapY));
+            components.push_back(std::make_unique<CapacitorComponent>(snapX, snapY)); placed = true;
         }
         // --- تعاملی و خروجی ---
         else if (selectedTool == ComponentType::SWITCH) {
-            components.push_back(std::make_unique<SwitchComponent>(snapX, snapY));
+            components.push_back(std::make_unique<SwitchComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::PUSH_BUTTON) {
-            components.push_back(std::make_unique<PushButtonComponent>(snapX, snapY));
+            components.push_back(std::make_unique<PushButtonComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::LED) {
-            components.push_back(std::make_unique<LEDComponent>(snapX, snapY));
+            components.push_back(std::make_unique<LEDComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::SEVEN_SEGMENT) {
-            components.push_back(std::make_unique<SevenSegmentComponent>(snapX, snapY));
+            components.push_back(std::make_unique<SevenSegmentComponent>(snapX, snapY)); placed = true;
         }
         // --- گیت‌های منطقی و فلیپ‌فلاپ ---
         else if (selectedTool == ComponentType::GATE_AND) {
-            components.push_back(std::make_unique<GateANDComponent>(snapX, snapY));
+            components.push_back(std::make_unique<GateANDComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::GATE_OR) {
-            components.push_back(std::make_unique<GateORComponent>(snapX, snapY));
+            components.push_back(std::make_unique<GateORComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::GATE_NOT) {
-            components.push_back(std::make_unique<GateNOTComponent>(snapX, snapY));
+            components.push_back(std::make_unique<GateNOTComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::GATE_XOR) {
-            components.push_back(std::make_unique<GateXORComponent>(snapX, snapY));
+            components.push_back(std::make_unique<GateXORComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::GATE_NAND) {
-            components.push_back(std::make_unique<GateNANDComponent>(snapX, snapY));
+            components.push_back(std::make_unique<GateNANDComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::GATE_NOR) {
-            components.push_back(std::make_unique<GateNORComponent>(snapX, snapY));
+            components.push_back(std::make_unique<GateNORComponent>(snapX, snapY)); placed = true;
         }
         else if (selectedTool == ComponentType::FLIP_FLOP_D) {
-            components.push_back(std::make_unique<FlipFlopDComponent>(snapX, snapY));
+            components.push_back(std::make_unique<FlipFlopDComponent>(snapX, snapY)); placed = true;
+        }
+
+        // گزارش به کنسول که آیا قطعه رسم شد یا خیر
+        if (placed) {
+            std::cout << "SUCCESS: Component placed at X:" << snapX << " Y:" << snapY << std::endl;
+        } else {
+            std::cout << "ERROR: selectedTool did not match any component!" << std::endl;
         }
 
         // خروج از حالت جای‌گذاری پس از قرار دادن قطعه
         isPlacingMode = false;
-        return action;
+
+        // برگرداندن صفر به معنی هیچ دستوری برای منوی اصلی نیست (جلوگیری از ارور کامپایل)
+        return (EditorMenuAction)0;
     }
 
     // ۳. تعامل با کلیدها و قطعاتِ قرار داده شده روی صفحه
@@ -496,4 +576,29 @@ void EditorPage::Redo()
     LoadStateFromString(nextState);
 
     std::cout << "Redo Performed!" << std::endl;
+}
+// ========================================================
+// خروجی تصویر از مدار (با استفاده از تابع بومی SDL_SavePNG)
+// ========================================================
+void EditorPage::ExportToImage(SDL_Renderer* renderer)
+{
+    // خواندن تمام پیکسل‌های رندر شده روی صفحه
+    SDL_Surface* surface = SDL_RenderReadPixels(renderer, NULL);
+
+    if (surface) {
+        // استفاده از تابع داخلی و جدید SDL3 برای ذخیره PNG (بدون نیاز به DLL اضافه)
+        bool result = SDL_SavePNG(surface, "Circuit_Output.png");
+
+        if (result == true) {
+            std::cout << "\n============================================\n";
+            std::cout << " SUCCESS: Image Exported to 'Circuit_Output.png'" << std::endl;
+            std::cout << "============================================\n";
+        } else {
+            std::cout << "Export PNG Failed: " << SDL_GetError() << std::endl;
+        }
+
+        SDL_DestroySurface(surface);
+    } else {
+        std::cout << "Export Failed (Could not read pixels): " << SDL_GetError() << std::endl;
+    }
 }

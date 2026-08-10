@@ -226,7 +226,7 @@
 1786092604 d:\term\term8\oop\final\oop4\openproject.h
 	<SDL3/SDL.h>
 
-1786117722 source:d:\term\term8\oop\final\oop4\newproject.cpp
+1786161457 source:d:\term\term8\oop\final\oop4\newproject.cpp
 	"NewProject.h"
 	"ProjectManager.h"
 	"TextRenderer.h"
@@ -243,7 +243,7 @@
 	<string>
 	<vector>
 
-1786118535 d:\term\term8\oop\final\oop4\editorpage.h
+1786160850 d:\term\term8\oop\final\oop4\editorpage.h
 	<vector>
 	<sstream>
 	<SDL3/SDL.h>
@@ -280,7 +280,7 @@
 	"TextRenderer.h"
 	<iostream>
 
-1786117722 source:d:\term\term8\oop\final\oop4\main.cpp
+1786161458 source:d:\term\term8\oop\final\oop4\main.cpp
 	<SDL3/SDL.h>
 	<SDL3_ttf/SDL_ttf.h>
 	<iostream>
@@ -297,7 +297,7 @@
 1786090741 d:\term\term8\oop\final\oop4\saveas.h
 	<SDL3/SDL.h>
 
-1786117722 source:d:\term\term8\oop\final\oop4\openproject.cpp
+1786161457 source:d:\term\term8\oop\final\oop4\openproject.cpp
 	"OpenProject.h"
 	"ProjectManager.h"
 	"TextRenderer.h"
@@ -310,11 +310,12 @@
 	<windows.h>
 	<commdlg.h>
 
-1786114916 source:d:\term\term8\oop\final\oop4\editorpage.cpp
+1786162077 source:d:\term\term8\oop\final\oop4\editorpage.cpp
 	"EditorPage.h"
 	"TextRenderer.h"
 	<fstream>
 	<iostream>
+	<sstream>
 
 1786117095 source:d:\term\term8\oop\final\oop4\saveas.cpp
 	"SaveAs.h"
@@ -344,14 +345,14 @@
 	<SDL3/SDL.h>
 	<SDL3_ttf/SDL_ttf.h>
 
-1786118676 source:d:\term\term8\oop\final\github\editorpage.cpp
+1786162077 source:d:\term\term8\oop\final\github\editorpage.cpp
 	"EditorPage.h"
 	"TextRenderer.h"
 	<fstream>
 	<iostream>
 	<sstream>
 
-1786118535 d:\term\term8\oop\final\github\editorpage.h
+1786160850 d:\term\term8\oop\final\github\editorpage.h
 	<vector>
 	<sstream>
 	<SDL3/SDL.h>
@@ -373,7 +374,7 @@
 	<string>
 	<vector>
 
-1786117722 source:d:\term\term8\oop\final\github\main.cpp
+1786161458 source:d:\term\term8\oop\final\github\main.cpp
 	<SDL3/SDL.h>
 	<SDL3_ttf/SDL_ttf.h>
 	<iostream>
@@ -413,7 +414,7 @@
 	<iostream>
 	"openProject.h"
 
-1786117722 source:d:\term\term8\oop\final\github\newproject.cpp
+1786161457 source:d:\term\term8\oop\final\github\newproject.cpp
 	"NewProject.h"
 	"ProjectManager.h"
 	"TextRenderer.h"
@@ -422,7 +423,7 @@
 	<iostream>
 	<string>
 
-1786117722 source:d:\term\term8\oop\final\github\openproject.cpp
+1786161457 source:d:\term\term8\oop\final\github\openproject.cpp
 	"OpenProject.h"
 	"ProjectManager.h"
 	"TextRenderer.h"

@@ -6,10 +6,13 @@
 
 void DrawNewProject(SDL_Renderer* renderer);
 
-void HandleNewProjectClick(int x, int y);
+void HandleNewProjectClick(int x,int y);
+
 
 void HandleKeyboard(SDL_Event event);
 
+
 extern TTF_Font* font;
+
 
 #endif

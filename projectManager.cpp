@@ -1,63 +1,36 @@
 #include "ProjectManager.h"
-
 #include <fstream>
-#include <iostream>
-#include <vector>
-#include <string>
 
-
-// ------------------------------------
-// حداکثر تعداد پروژه‌های اخیر
-// ------------------------------------
-
-const int MAX_RECENT_PROJECTS = 10;
-
-
-// ------------------------------------
-// فایل ذخیره پروژه‌های اخیر
-// ------------------------------------
-
-const std::string PROJECT_FILE =
-    "recent_projects.dat";
-
-
-// ------------------------------------
-// لیست پروژه‌ها
-// ------------------------------------
 
 std::vector<Project> projects;
 
 
-// ------------------------------------
-// ذخیره لیست پروژه‌ها روی هارد
-// ------------------------------------
+//---------------------------------
+// ذخیره پروژه
+//---------------------------------
 
-static void SaveRecentProjectsToFile()
+void SaveProject(Project project)
 {
-    std::ofstream file(
-        PROJECT_FILE,
-        std::ios::trunc
-    );
+    projects.push_back(project);
 
-    if(!file.is_open())
+
+    // فقط 5 پروژه آخر نگه داشته شود
+    if(projects.size()>5)
     {
-        std::cout
-            << "Cannot save recent projects."
-            << std::endl;
-
-        return;
+        projects.erase(projects.begin());
     }
 
 
-    for(const Project& project : projects)
+    // ذخیره در فایل
+    std::ofstream file("projects.txt");
+
+
+    for(auto p : projects)
     {
-        file
-            << project.name
-            << "|"
-            << project.path
-            << "|"
-            << project.pageSize
-            << "\n";
+        file << p.name << " "
+             << p.path << " "
+             << p.pageSize
+             << std::endl;
     }
 
 
@@ -65,128 +38,10 @@ static void SaveRecentProjectsToFile()
 }
 
 
-// ------------------------------------
-// Load Projects
-// ------------------------------------
 
-void LoadProjects()
-{
-    projects.clear();
-
-
-    std::ifstream file(PROJECT_FILE);
-
-    if(!file.is_open())
-    {
-        return;
-    }
-
-
-    std::string name;
-    std::string path;
-    std::string pageSize;
-
-
-    while(
-        std::getline(file, name, '|') &&
-        std::getline(file, path, '|') &&
-        std::getline(file, pageSize)
-    )
-    {
-        Project project;
-
-        project.name = name;
-        project.path = path;
-        project.pageSize = pageSize;
-
-
-        projects.push_back(project);
-    }
-
-
-    file.close();
-
-
-    // فقط 10 پروژه نگه داشته شود
-
-    if(projects.size() > MAX_RECENT_PROJECTS)
-    {
-        projects.resize(MAX_RECENT_PROJECTS);
-    }
-}
-
-
-// ------------------------------------
-// اضافه کردن پروژه به Recent
-// ------------------------------------
-
-static void AddToRecentProjects(const Project& project)
-{
-    // اگر همین پروژه قبلاً در لیست بوده
-    for(auto it = projects.begin();
-        it != projects.end();
-        ++it)
-    {
-        if(it->name == project.name &&
-           it->path == project.path)
-        {
-            projects.erase(it);
-            break;
-        }
-    }
-
-    // پروژه جدید را اول لیست قرار بده
-    projects.insert(
-        projects.begin(),
-        project
-    );
-
-    // فقط 10 پروژه اخیر
-    if(projects.size() > MAX_RECENT_PROJECTS)
-    {
-        projects.resize(MAX_RECENT_PROJECTS);
-    }
-
-    // ذخیره روی هارد
-    SaveRecentProjectsToFile();
-}
-
-
-// ------------------------------------
-// Save Project
-// ------------------------------------
-
-void SaveProject(const Project& project)
-{
-    AddToRecentProjects(project);
-
-
-    std::cout
-        << "Project Saved: "
-        << project.name
-        << std::endl;
-}
-
-
-// ------------------------------------
-// Save As
-// ------------------------------------
-
-void SaveProjectAs(const Project& project)
-{
-    AddToRecentProjects(project);
-
-
-    std::cout
-        << "Project Saved As: "
-        << project.name
-        << std::endl;
-}
-
-
-// ------------------------------------
-// Get Recent Projects
-// ------------------------------------
+//---------------------------------
+// گرفتن پروژه های اخیر
+//---------------------------------
 
 std::vector<Project> GetRecentProjects()
 {
@@ -194,23 +49,36 @@ std::vector<Project> GetRecentProjects()
 }
 
 
-// ------------------------------------
-// Open Project
-// ------------------------------------
 
-bool OpenProject(const Project& project)
+//---------------------------------
+// خواندن پروژه ها از فایل
+//---------------------------------
+
+std::vector<Project> LoadProjects()
 {
-    std::cout
-        << "Opening Project: "
-        << project.name
-        << std::endl;
+    projects.clear();
 
 
-    // وقتی پروژه باز می‌شود
-    // آن را نیز به ابتدای Recent منتقل کن
-
-    AddToRecentProjects(project);
+    std::ifstream file("projects.txt");
 
 
-    return true;
+    if(!file)
+        return projects;
+
+
+    Project p;
+
+
+    while(file >> p.name
+               >> p.path
+               >> p.pageSize)
+    {
+        projects.push_back(p);
+    }
+
+
+    file.close();
+
+
+    return projects;
 }

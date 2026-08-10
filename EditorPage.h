@@ -1,6 +1,7 @@
 #ifndef EDITORPAGE_H
 #define EDITORPAGE_H
-
+#include <vector>
+#include <sstream>
 #include <SDL3/SDL.h>
 #include <vector>
 #include <memory>
@@ -43,11 +44,21 @@ public:
     EditorPage(SDL_Window* window);
 
     void ClearWorkspace();
-
+    void SaveWorkspace(const std::string& filepath);
+    void LoadWorkspace(const std::string& filepath);
     void Draw(SDL_Renderer* renderer);
     EditorMenuAction HandleClick(int x, int y);
     void HandleMouseMotion(int x, int y);
     void HandleKeyboard(SDL_Event event);
+    std::vector<std::string> undoStack;
+    std::vector<std::string> redoStack;
+
+    std::string SaveStateToString();
+    void LoadStateFromString(const std::string& state);
+
+    void SaveCurrentStateForUndo();
+    void Undo();
+    void Redo();
 };
 
 #endif

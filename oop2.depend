@@ -194,6 +194,139 @@
 
 1786103870 d:\term\term8\oop\final\oop3\basiccomponents.h
 
+1785899709 source:d:\term\term8\oop\final\oop4\button.cpp
+	"Button.h"
+
+1785899709 d:\term\term8\oop\final\oop4\button.h
+	<SDL3/SDL.h>
+
+1786091019 source:d:\term\term8\oop\final\oop4\editormenu.cpp
+	"EditorMenu.h"
+	"TextRenderer.h"
+
+1786089871 d:\term\term8\oop\final\oop4\editormenu.h
+	<SDL3/SDL.h>
+
+1785910373 d:\term\term8\oop\final\oop4\textrenderer.h
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+
+1786090247 source:d:\term\term8\oop\final\oop4\menu.cpp
+	"Menu.h"
+	<SDL3/SDL.h>
+	<iostream>
+	"openProject.h"
+
+1785907215 d:\term\term8\oop\final\oop4\menu.h
+	<SDL3/SDL.h>
+	"Page.h"
+
+1786089871 d:\term\term8\oop\final\oop4\page.h
+
+1786092604 d:\term\term8\oop\final\oop4\openproject.h
+	<SDL3/SDL.h>
+
+1786117722 source:d:\term\term8\oop\final\oop4\newproject.cpp
+	"NewProject.h"
+	"ProjectManager.h"
+	"TextRenderer.h"
+	"Page.h"
+	"EditorPage.h"
+	<iostream>
+	<string>
+
+1786092242 d:\term\term8\oop\final\oop4\newproject.h
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+
+1786089871 d:\term\term8\oop\final\oop4\projectmanager.h
+	<string>
+	<vector>
+
+1786118535 d:\term\term8\oop\final\oop4\editorpage.h
+	<vector>
+	<sstream>
+	<SDL3/SDL.h>
+	<vector>
+	<memory>
+	<cmath>
+	<string>
+	<algorithm>
+	"EditorMenu.h"
+	"SearchBox.h"
+	"Component.h"
+
+1786104262 d:\term\term8\oop\final\oop4\searchbox.h
+	<SDL3/SDL.h>
+	<string>
+
+1786106283 d:\term\term8\oop\final\oop4\component.h
+	<SDL3/SDL.h>
+	<string>
+	<vector>
+
+1786116436 source:d:\term\term8\oop\final\oop4\projectmanager.cpp
+	"ProjectManager.h"
+	<fstream>
+	<iostream>
+	<vector>
+	<string>
+
+1786104262 source:d:\term\term8\oop\final\oop4\searchbox.cpp
+	"SearchBox.h"
+	"TextRenderer.h"
+
+1785908291 source:d:\term\term8\oop\final\oop4\textrenderer.cpp
+	"TextRenderer.h"
+	<iostream>
+
+1786117722 source:d:\term\term8\oop\final\oop4\main.cpp
+	<SDL3/SDL.h>
+	<SDL3_ttf/SDL_ttf.h>
+	<iostream>
+	<vector>
+	"SaveAs.h"
+	"Page.h"
+	"ProjectManager.h"
+	"TextRenderer.h"
+	"Menu.h"
+	"NewProject.h"
+	"OpenProject.h"
+	"EditorPage.h"
+
+1786090741 d:\term\term8\oop\final\oop4\saveas.h
+	<SDL3/SDL.h>
+
+1786117722 source:d:\term\term8\oop\final\oop4\openproject.cpp
+	"OpenProject.h"
+	"ProjectManager.h"
+	"TextRenderer.h"
+	"Page.h"
+	"EditorPage.h"
+	<SDL3/SDL.h>
+	<iostream>
+	<vector>
+	<string>
+	<windows.h>
+	<commdlg.h>
+
+1786114916 source:d:\term\term8\oop\final\oop4\editorpage.cpp
+	"EditorPage.h"
+	"TextRenderer.h"
+	<fstream>
+	<iostream>
+
+1786117095 source:d:\term\term8\oop\final\oop4\saveas.cpp
+	"SaveAs.h"
+	"TextRenderer.h"
+	"ProjectManager.h"
+	"Page.h"
+	"EditorPage.h"
+	<iostream>
+	<string>
+	<windows.h>
+	<commdlg.h>
+
 1785899709 source:d:\term\term8\oop\final\github\button.cpp
 	"Button.h"
 
@@ -211,11 +344,16 @@
 	<SDL3/SDL.h>
 	<SDL3_ttf/SDL_ttf.h>
 
-1786108083 source:d:\term\term8\oop\final\github\editorpage.cpp
+1786118676 source:d:\term\term8\oop\final\github\editorpage.cpp
 	"EditorPage.h"
 	"TextRenderer.h"
+	<fstream>
+	<iostream>
+	<sstream>
 
-1786108083 d:\term\term8\oop\final\github\editorpage.h
+1786118535 d:\term\term8\oop\final\github\editorpage.h
+	<vector>
+	<sstream>
 	<SDL3/SDL.h>
 	<vector>
 	<memory>
@@ -235,7 +373,7 @@
 	<string>
 	<vector>
 
-1786103870 source:d:\term\term8\oop\final\github\main.cpp
+1786117722 source:d:\term\term8\oop\final\github\main.cpp
 	<SDL3/SDL.h>
 	<SDL3_ttf/SDL_ttf.h>
 	<iostream>
@@ -275,7 +413,7 @@
 	<iostream>
 	"openProject.h"
 
-1786108083 source:d:\term\term8\oop\final\github\newproject.cpp
+1786117722 source:d:\term\term8\oop\final\github\newproject.cpp
 	"NewProject.h"
 	"ProjectManager.h"
 	"TextRenderer.h"
@@ -284,7 +422,7 @@
 	<iostream>
 	<string>
 
-1786108187 source:d:\term\term8\oop\final\github\openproject.cpp
+1786117722 source:d:\term\term8\oop\final\github\openproject.cpp
 	"OpenProject.h"
 	"ProjectManager.h"
 	"TextRenderer.h"
@@ -297,18 +435,19 @@
 	<windows.h>
 	<commdlg.h>
 
-1786092781 source:d:\term\term8\oop\final\github\projectmanager.cpp
+1786116436 source:d:\term\term8\oop\final\github\projectmanager.cpp
 	"ProjectManager.h"
 	<fstream>
 	<iostream>
 	<vector>
 	<string>
 
-1786107149 source:d:\term\term8\oop\final\github\saveas.cpp
+1786117095 source:d:\term\term8\oop\final\github\saveas.cpp
 	"SaveAs.h"
 	"TextRenderer.h"
 	"ProjectManager.h"
 	"Page.h"
+	"EditorPage.h"
 	<iostream>
 	<string>
 	<windows.h>

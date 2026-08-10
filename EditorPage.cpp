@@ -1,5 +1,8 @@
 #include "EditorPage.h"
 #include "TextRenderer.h"
+#include <fstream>
+#include <iostream>
+#include <sstream>
 // در صورتی که TextRenderer دارید آن را اینکلود کنید تا نام قطعات روی دکمه‌ها نوشته شود
 // #include "TextRenderer.h"
 
@@ -155,6 +158,40 @@ void EditorPage::Draw(SDL_Renderer* renderer)
 
     menu.Draw(renderer);
     search.Draw(renderer);
+    // ------------------------------------
+    // رسم دکمه Undo در بالای صفحه
+    // ------------------------------------
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+    SDL_FRect undoBtn = { 450, 10, 80, 30 };
+    SDL_RenderFillRect(renderer, &undoBtn);
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &undoBtn); // حاشیه
+
+    SDL_Color black = {0,0,0,255};
+    SDL_Texture* txtUndo = TextRenderer::CreateText(renderer, "< Undo", black);
+    if (txtUndo) {
+        SDL_FRect posU = { 460, 15, 60, 20 };
+        SDL_RenderTexture(renderer, txtUndo, NULL, &posU);
+        SDL_DestroyTexture(txtUndo);
+    }
+
+    // ------------------------------------
+    // رسم دکمه Redo در بالای صفحه
+    // ------------------------------------
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+    SDL_FRect redoBtn = { 540, 10, 80, 30 };
+    SDL_RenderFillRect(renderer, &redoBtn);
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &redoBtn); // حاشیه
+
+    SDL_Texture* txtRedo = TextRenderer::CreateText(renderer, "Redo >", black);
+    if (txtRedo) {
+        SDL_FRect posR = { 550, 15, 60, 20 };
+        SDL_RenderTexture(renderer, txtRedo, NULL, &posR);
+        SDL_DestroyTexture(txtRedo);
+    }
 }
 
 //-----------------------------------------
@@ -165,10 +202,21 @@ void EditorPage::Draw(SDL_Renderer* renderer)
 // =====================================
 EditorMenuAction EditorPage::HandleClick(int x, int y)
 {
+
     // بررسی کلیک روی منوی بالا و سرچ باکس
     EditorMenuAction action = menu.HandleClick(x, y);
     search.HandleClick(x, y);
+    // بررسی کلیک روی Undo
+    if (x >= 450 && x <= 530 && y >= 10 && y <= 40) {
+        Undo();
+        return (EditorMenuAction)0;
+    }
 
+    // بررسی کلیک روی Redo
+    if (x >= 540 && x <= 620 && y >= 10 && y <= 40) {
+        Redo();
+        return (EditorMenuAction)0;
+    }
     // ۱. بررسی کلیک روی نوار ابزار (Sidebar) برای انتخاب قطعه از لیست پویا
     if (x < 100 && y > 50) {
         int index = (y - 70) / 40;
@@ -188,48 +236,70 @@ EditorMenuAction EditorPage::HandleClick(int x, int y)
         float snapX = std::round(x / 20.0f) * 20.0f;
         float snapY = std::round(y / 20.0f) * 20.0f;
 
+        // ========================================================
+        // ذخیره وضعیت فعلی برای Undo (فقط همین یک خط کافی است!)
+        // این کار قبل از اضافه شدن قطعه جدید انجام می‌شود
+        // ========================================================
+        SaveCurrentStateForUndo();
+
         // --- منابع اصلی ---
-        if (selectedTool == ComponentType::GND)
+        if (selectedTool == ComponentType::GND) {
             components.push_back(std::make_unique<GNDComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::DC_SOURCE)
+        }
+        else if (selectedTool == ComponentType::DC_SOURCE) {
             components.push_back(std::make_unique<DCSourceComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::BATTERY)
+        }
+        else if (selectedTool == ComponentType::BATTERY) {
             components.push_back(std::make_unique<BatteryComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::CLOCK)
+        }
+        else if (selectedTool == ComponentType::CLOCK) {
             components.push_back(std::make_unique<ClockComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::LOGIC_STATE) // <--- اضافه کردن این خط
+        }
+        else if (selectedTool == ComponentType::LOGIC_STATE) {
             components.push_back(std::make_unique<LogicStateComponent>(snapX, snapY));
+        }
         // --- قطعات غیرفعال ---
-        else if (selectedTool == ComponentType::RESISTOR)
+        else if (selectedTool == ComponentType::RESISTOR) {
             components.push_back(std::make_unique<ResistorComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::CAPACITOR)
+        }
+        else if (selectedTool == ComponentType::CAPACITOR) {
             components.push_back(std::make_unique<CapacitorComponent>(snapX, snapY));
-
+        }
         // --- تعاملی و خروجی ---
-        else if (selectedTool == ComponentType::SWITCH)
+        else if (selectedTool == ComponentType::SWITCH) {
             components.push_back(std::make_unique<SwitchComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::PUSH_BUTTON)
+        }
+        else if (selectedTool == ComponentType::PUSH_BUTTON) {
             components.push_back(std::make_unique<PushButtonComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::LED)
+        }
+        else if (selectedTool == ComponentType::LED) {
             components.push_back(std::make_unique<LEDComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::SEVEN_SEGMENT)
+        }
+        else if (selectedTool == ComponentType::SEVEN_SEGMENT) {
             components.push_back(std::make_unique<SevenSegmentComponent>(snapX, snapY));
-
+        }
         // --- گیت‌های منطقی و فلیپ‌فلاپ ---
-        else if (selectedTool == ComponentType::GATE_AND)
+        else if (selectedTool == ComponentType::GATE_AND) {
             components.push_back(std::make_unique<GateANDComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::GATE_OR)
+        }
+        else if (selectedTool == ComponentType::GATE_OR) {
             components.push_back(std::make_unique<GateORComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::GATE_NOT)
+        }
+        else if (selectedTool == ComponentType::GATE_NOT) {
             components.push_back(std::make_unique<GateNOTComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::GATE_XOR)
+        }
+        else if (selectedTool == ComponentType::GATE_XOR) {
             components.push_back(std::make_unique<GateXORComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::GATE_NAND)
+        }
+        else if (selectedTool == ComponentType::GATE_NAND) {
             components.push_back(std::make_unique<GateNANDComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::GATE_NOR)
+        }
+        else if (selectedTool == ComponentType::GATE_NOR) {
             components.push_back(std::make_unique<GateNORComponent>(snapX, snapY));
-        else if (selectedTool == ComponentType::FLIP_FLOP_D)
+        }
+        else if (selectedTool == ComponentType::FLIP_FLOP_D) {
             components.push_back(std::make_unique<FlipFlopDComponent>(snapX, snapY));
+        }
 
         // خروج از حالت جای‌گذاری پس از قرار دادن قطعه
         isPlacingMode = false;
@@ -270,4 +340,160 @@ void EditorPage::ClearWorkspace()
 
     // خروج از حالت جای‌گذاری قطعه (اگر دست کاربر ابزاری بوده لغو شود)
     isPlacingMode = false;
+}
+//-----------------------------------------
+// Save Workspace (ذخیره قطعات در فایل)
+//-----------------------------------------
+void EditorPage::SaveWorkspace(const std::string& filepath)
+{
+    std::ofstream file(filepath);
+    if (!file.is_open()) {
+        std::cout << "Error: Could not save file to " << filepath << std::endl;
+        return;
+    }
+
+    // ذخیره هر قطعه: ابتدا نوع قطعه (به صورت عدد)، سپس X و Y
+    for (const auto& comp : components) {
+        file << (int)comp->type << " " << comp->x << " " << comp->y << "\n";
+    }
+
+    file.close();
+    std::cout << "Workspace saved successfully to: " << filepath << std::endl;
+}
+
+//-----------------------------------------
+// Load Workspace (خواندن قطعات از فایل)
+//-----------------------------------------
+void EditorPage::LoadWorkspace(const std::string& filepath)
+{
+    ClearWorkspace(); // ابتدا صفحه را پاک کن
+
+    std::ifstream file(filepath);
+    if (!file.is_open()) {
+        std::cout << "Error: Could not open file " << filepath << std::endl;
+        return;
+    }
+
+    int typeInt;
+    float x, y;
+
+    // خواندن خط به خط فایل
+    while (file >> typeInt >> x >> y)
+    {
+        ComponentType type = (ComponentType)typeInt;
+
+        // بر اساس نوع قطعه خوانده شده، آن را می‌سازیم و در صفحه قرار می‌دهیم
+        if (type == ComponentType::GND) components.push_back(std::make_unique<GNDComponent>(x, y));
+        else if (type == ComponentType::DC_SOURCE) components.push_back(std::make_unique<DCSourceComponent>(x, y));
+        else if (type == ComponentType::BATTERY) components.push_back(std::make_unique<BatteryComponent>(x, y));
+        else if (type == ComponentType::LOGIC_STATE) components.push_back(std::make_unique<LogicStateComponent>(x, y));
+        else if (type == ComponentType::CLOCK) components.push_back(std::make_unique<ClockComponent>(x, y));
+        else if (type == ComponentType::RESISTOR) components.push_back(std::make_unique<ResistorComponent>(x, y));
+        else if (type == ComponentType::CAPACITOR) components.push_back(std::make_unique<CapacitorComponent>(x, y));
+        else if (type == ComponentType::PUSH_BUTTON) components.push_back(std::make_unique<PushButtonComponent>(x, y));
+        else if (type == ComponentType::SWITCH) components.push_back(std::make_unique<SwitchComponent>(x, y));
+        else if (type == ComponentType::LED) components.push_back(std::make_unique<LEDComponent>(x, y));
+        else if (type == ComponentType::SEVEN_SEGMENT) components.push_back(std::make_unique<SevenSegmentComponent>(x, y));
+        else if (type == ComponentType::GATE_AND) components.push_back(std::make_unique<GateANDComponent>(x, y));
+        else if (type == ComponentType::GATE_OR) components.push_back(std::make_unique<GateORComponent>(x, y));
+        else if (type == ComponentType::GATE_NOT) components.push_back(std::make_unique<GateNOTComponent>(x, y));
+        else if (type == ComponentType::GATE_NAND) components.push_back(std::make_unique<GateNANDComponent>(x, y));
+        else if (type == ComponentType::GATE_NOR) components.push_back(std::make_unique<GateNORComponent>(x, y));
+        else if (type == ComponentType::GATE_XOR) components.push_back(std::make_unique<GateXORComponent>(x, y));
+        else if (type == ComponentType::FLIP_FLOP_D) components.push_back(std::make_unique<FlipFlopDComponent>(x, y));
+    }
+
+    file.close();
+    std::cout << "Workspace loaded successfully from: " << filepath << std::endl;
+}
+// ========================================================
+// منطق Undo و Redo
+// ========================================================
+
+std::string EditorPage::SaveStateToString()
+{
+    std::stringstream ss;
+    // ذخیره تمام قطعات دقیقاً مثل ذخیره در فایل
+    for (const auto& comp : components) {
+        ss << (int)comp->type << " " << comp->x << " " << comp->y << "\n";
+    }
+    return ss.str();
+}
+
+void EditorPage::LoadStateFromString(const std::string& state)
+{
+    ClearWorkspace(); // پاک کردن صفحه فعلی
+    std::stringstream ss(state);
+
+    int typeInt;
+    float x, y;
+
+    // خواندن قطعات از روی متن موجود در رم
+    while (ss >> typeInt >> x >> y)
+    {
+        ComponentType type = (ComponentType)typeInt;
+
+        if (type == ComponentType::GND) components.push_back(std::make_unique<GNDComponent>(x, y));
+        else if (type == ComponentType::DC_SOURCE) components.push_back(std::make_unique<DCSourceComponent>(x, y));
+        else if (type == ComponentType::BATTERY) components.push_back(std::make_unique<BatteryComponent>(x, y));
+        else if (type == ComponentType::LOGIC_STATE) components.push_back(std::make_unique<LogicStateComponent>(x, y));
+        else if (type == ComponentType::CLOCK) components.push_back(std::make_unique<ClockComponent>(x, y));
+        else if (type == ComponentType::RESISTOR) components.push_back(std::make_unique<ResistorComponent>(x, y));
+        else if (type == ComponentType::CAPACITOR) components.push_back(std::make_unique<CapacitorComponent>(x, y));
+        else if (type == ComponentType::PUSH_BUTTON) components.push_back(std::make_unique<PushButtonComponent>(x, y));
+        else if (type == ComponentType::SWITCH) components.push_back(std::make_unique<SwitchComponent>(x, y));
+        else if (type == ComponentType::LED) components.push_back(std::make_unique<LEDComponent>(x, y));
+        else if (type == ComponentType::SEVEN_SEGMENT) components.push_back(std::make_unique<SevenSegmentComponent>(x, y));
+        else if (type == ComponentType::GATE_AND) components.push_back(std::make_unique<GateANDComponent>(x, y));
+        else if (type == ComponentType::GATE_OR) components.push_back(std::make_unique<GateORComponent>(x, y));
+        else if (type == ComponentType::GATE_NOT) components.push_back(std::make_unique<GateNOTComponent>(x, y));
+        else if (type == ComponentType::GATE_NAND) components.push_back(std::make_unique<GateNANDComponent>(x, y));
+        else if (type == ComponentType::GATE_NOR) components.push_back(std::make_unique<GateNORComponent>(x, y));
+        else if (type == ComponentType::GATE_XOR) components.push_back(std::make_unique<GateXORComponent>(x, y));
+        else if (type == ComponentType::FLIP_FLOP_D) components.push_back(std::make_unique<FlipFlopDComponent>(x, y));
+    }
+}
+
+void EditorPage::SaveCurrentStateForUndo()
+{
+    // اگر از 10 تا بیشتر شد، قدیمی‌ترین را پاک کن
+    if (undoStack.size() >= 10) {
+        undoStack.erase(undoStack.begin());
+    }
+
+    // وضعیت فعلی را به لیست Undo اضافه کن
+    undoStack.push_back(SaveStateToString());
+
+    // وقتی کار جدیدی انجام می‌شود، لیست Redo باید خالی شود
+    redoStack.clear();
+}
+
+void EditorPage::Undo()
+{
+    if (undoStack.empty()) return; // اگر چیزی برای برگشت نیست خارج شو
+
+    // وضعیت فعلی را برای Redo ذخیره کن
+    redoStack.push_back(SaveStateToString());
+
+    // وضعیت قبلی را بخوان و اعمال کن
+    std::string prevState = undoStack.back();
+    undoStack.pop_back();
+    LoadStateFromString(prevState);
+
+    std::cout << "Undo Performed!" << std::endl;
+}
+
+void EditorPage::Redo()
+{
+    if (redoStack.empty()) return; // اگر چیزی برای جلو رفتن نیست خارج شو
+
+    // وضعیت فعلی را برای Undo ذخیره کن
+    undoStack.push_back(SaveStateToString());
+
+    // وضعیت بعدی را بخوان و اعمال کن
+    std::string nextState = redoStack.back();
+    redoStack.pop_back();
+    LoadStateFromString(nextState);
+
+    std::cout << "Redo Performed!" << std::endl;
 }

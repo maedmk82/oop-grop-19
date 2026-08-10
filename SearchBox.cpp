@@ -12,19 +12,23 @@ SearchBox::SearchBox(SDL_Window* window)
 // Draw
 // =====================================
 
+// =====================================
+// Draw
+// =====================================
+
 void SearchBox::Draw(SDL_Renderer* renderer)
 {
     SDL_Color black = {0, 0, 0, 255};
 
     // -------------------------
-    // پس‌زمینه کادر جستجو
+    // پس‌زمینه کادر جستجو (منتقل شد به سمت چپ)
     // -------------------------
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
     SDL_FRect box = {
-        570,
+        120,   // تغییر یافته به سمت چپ
         5,
-        300,
+        250,   // عرض کمی جمع‌وجورتر شد تا با بقیه دکمه‌ها تداخل نکند
         30
     };
 
@@ -34,10 +38,8 @@ void SearchBox::Draw(SDL_Renderer* renderer)
     // کادر دور Search (تغییر رنگ هنگام فعال بودن)
     // -------------------------
     if (active) {
-        // رنگ آبی روشن برای نشان دادن حالت فعال (Focus)
         SDL_SetRenderDrawColor(renderer, 0, 150, 255, 255);
     } else {
-        // رنگ خاکستری برای حالت غیرفعال
         SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
     }
 
@@ -51,7 +53,6 @@ void SearchBox::Draw(SDL_Renderer* renderer)
     if(text.empty())
     {
         displayText = "Search...";
-        // رنگ متن پیش‌فرض را کمی کم‌رنگ‌تر می‌کنیم (اختیاری)
         black = {150, 150, 150, 255};
     }
     else
@@ -67,29 +68,21 @@ void SearchBox::Draw(SDL_Renderer* renderer)
 
     if(searchText)
     {
-        // گرفتن سایز واقعی متن برای جلوگیری از کشیده شدن (Stretch)
         float texW = 0, texH = 0;
         SDL_GetTextureSize(searchText, &texW, &texH);
 
-        // جلوگیری از بیرون زدن متن از کادر اگر طولانی شد
-        if (texW > 280) {
-            texW = 280;
+        if (texW > 230) { // محدودیت عرض متن هم متناسب با عرض جدید کادر تغییر کرد
+            texW = 230;
         }
 
         SDL_FRect pos = {
-            580,
+            130,   // متن هم به سمت چپ شیفت پیدا کرد
             10,
-            texW,  // استفاده از عرض واقعی کلمه به جای عدد ثابت 270
-            20     // ارتفاع فونت شما تقریبا 20 مناسب است
+            texW,
+            20
         };
 
-        SDL_RenderTexture(
-            renderer,
-            searchText,
-            NULL,
-            &pos
-        );
-
+        SDL_RenderTexture(renderer, searchText, NULL, &pos);
         SDL_DestroyTexture(searchText);
     }
 }
@@ -100,7 +93,8 @@ void SearchBox::Draw(SDL_Renderer* renderer)
 
 void SearchBox::HandleClick(int x, int y)
 {
-    if(x >= 570 && x <= 870 &&
+    // مختصات کلیک هم با کادر جدیدِ سمت چپ تنظیم شد
+    if(x >= 120 && x <= 370 &&
        y >= 5 && y <= 35)
     {
         active = true;
@@ -112,7 +106,6 @@ void SearchBox::HandleClick(int x, int y)
         SDL_StopTextInput(window);
     }
 }
-
 // =====================================
 // Keyboard
 // =====================================

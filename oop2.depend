@@ -243,7 +243,7 @@
 	<string>
 	<vector>
 
-1786160850 d:\term\term8\oop\final\oop4\editorpage.h
+1786163672 d:\term\term8\oop\final\oop4\editorpage.h
 	<vector>
 	<sstream>
 	<SDL3/SDL.h>
@@ -260,7 +260,7 @@
 	<SDL3/SDL.h>
 	<string>
 
-1786106283 d:\term\term8\oop\final\oop4\component.h
+1786168415 d:\term\term8\oop\final\oop4\component.h
 	<SDL3/SDL.h>
 	<string>
 	<vector>
@@ -272,7 +272,7 @@
 	<vector>
 	<string>
 
-1786104262 source:d:\term\term8\oop\final\oop4\searchbox.cpp
+1786164651 source:d:\term\term8\oop\final\oop4\searchbox.cpp
 	"SearchBox.h"
 	"TextRenderer.h"
 
@@ -280,7 +280,7 @@
 	"TextRenderer.h"
 	<iostream>
 
-1786161458 source:d:\term\term8\oop\final\oop4\main.cpp
+1786169340 source:d:\term\term8\oop\final\oop4\main.cpp
 	<SDL3/SDL.h>
 	<SDL3_ttf/SDL_ttf.h>
 	<iostream>
@@ -310,12 +310,13 @@
 	<windows.h>
 	<commdlg.h>
 
-1786162077 source:d:\term\term8\oop\final\oop4\editorpage.cpp
+1786169198 source:d:\term\term8\oop\final\oop4\editorpage.cpp
 	"EditorPage.h"
 	"TextRenderer.h"
 	<fstream>
 	<iostream>
 	<sstream>
+	<algorithm>
 
 1786117095 source:d:\term\term8\oop\final\oop4\saveas.cpp
 	"SaveAs.h"
@@ -345,14 +346,15 @@
 	<SDL3/SDL.h>
 	<SDL3_ttf/SDL_ttf.h>
 
-1786162077 source:d:\term\term8\oop\final\github\editorpage.cpp
+1786169788 source:d:\term\term8\oop\final\github\editorpage.cpp
 	"EditorPage.h"
 	"TextRenderer.h"
 	<fstream>
 	<iostream>
 	<sstream>
+	<algorithm>
 
-1786160850 d:\term\term8\oop\final\github\editorpage.h
+1786163672 d:\term\term8\oop\final\github\editorpage.h
 	<vector>
 	<sstream>
 	<SDL3/SDL.h>
@@ -369,12 +371,12 @@
 	<SDL3/SDL.h>
 	<string>
 
-1786106283 d:\term\term8\oop\final\github\component.h
+1786168415 d:\term\term8\oop\final\github\component.h
 	<SDL3/SDL.h>
 	<string>
 	<vector>
 
-1786161458 source:d:\term\term8\oop\final\github\main.cpp
+1786169340 source:d:\term\term8\oop\final\github\main.cpp
 	<SDL3/SDL.h>
 	<SDL3_ttf/SDL_ttf.h>
 	<iostream>
@@ -454,7 +456,7 @@
 	<windows.h>
 	<commdlg.h>
 
-1786104262 source:d:\term\term8\oop\final\github\searchbox.cpp
+1786164651 source:d:\term\term8\oop\final\github\searchbox.cpp
 	"SearchBox.h"
 	"TextRenderer.h"
 

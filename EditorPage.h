@@ -61,6 +61,15 @@ public:
     void SaveCurrentStateForUndo();
     void Undo();
     void Redo();
+    // --- متغیرهای جدید برای انتخاب گروهی و جابه‌جایی ---
+    bool isDragging = false;
+    bool isSelectingBox = false;
+    float selStartX = 0, selStartY = 0;
+    float lastMouseX = 0, lastMouseY = 0;
+
+    // توابع جدید موس
+    void HandleMouseMove(int x, int y);
+    void HandleMouseRelease(int x, int y);
 };
 
 #endif

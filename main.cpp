@@ -198,6 +198,24 @@ int main(int argc, char* argv[])
                 {
                    HandleSaveAsClick(x, y);
                 }
+            } // <--- پایان رویداد کلیک موس (DOWN)
+
+            // =========================================================
+            // اضافه شدن رویدادهای کشیدن و رها کردن موس (Drag & Drop)
+            // =========================================================
+
+            // ۱. رویداد حرکت موس (وقتی موس روی صفحه کشیده می‌شود)
+            else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+                if (CurrentPage == EDITOR_PAGE && editor != nullptr) {
+                    editor->HandleMouseMove(event.motion.x, event.motion.y);
+                }
+            }
+
+            // ۲. رویداد رها کردن کلیک موس (پایان جابه‌جایی قطعه یا کادر انتخاب)
+            else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+                if (CurrentPage == EDITOR_PAGE && editor != nullptr) {
+                    editor->HandleMouseRelease(event.button.x, event.button.y);
+                }
             }
 
             // --------------------------------
@@ -207,10 +225,20 @@ int main(int argc, char* argv[])
             {
                 if (CurrentPage == EDITOR_PAGE && editor != nullptr)
                 {
-                    editor->HandleMouseMotion(event.motion.x, event.motion.y);
+                    editor->HandleMouseMove(event.motion.x, event.motion.y);
                 }
             }
-
+            // کدهایی که قبلا برای کلیک (DOWN) داشتید...
+                else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+                    if (CurrentPage == EDITOR_PAGE && editor != nullptr) {
+                        editor->HandleMouseMove(event.motion.x, event.motion.y);
+                    }
+                }
+                else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+                    if (CurrentPage == EDITOR_PAGE && editor != nullptr) {
+                        editor->HandleMouseRelease(event.button.x, event.button.y);
+                    }
+                }
             // --------------------------------
             // 4. کیبورد (تایپ و دکمه‌ها)
             // --------------------------------

@@ -32,6 +32,9 @@ struct Pin {
 // -----------------------------------------
 // 3. کلاس پایه (والد) - باید قبل از فرزندان باشد
 // -----------------------------------------
+// -----------------------------------------
+// 3. کلاس پایه (والد) - باید قبل از فرزندان باشد
+// -----------------------------------------
 class Component {
 public:
     int id;
@@ -41,7 +44,45 @@ public:
     float height = 40.0f;
     ComponentType type;
     std::vector<Pin> pins;
+    // تابعی برای رسم خط با در نظر گرفتن چرخش و قرینه
+    void DrawLine(SDL_Renderer* renderer, float x1, float y1, float x2, float y2) {
+        float centerX = width / 2.0f;
+        float centerY = height / 2.0f;
+
+        // تبدیل به مختصات نسبت به مرکز قطعه
+        auto transform = [&](float lx, float ly) -> std::pair<float, float> {
+            // 1. قرینه
+            if (isMirrored) lx = -lx;
+
+            // 2. چرخش (ساده‌سازی شده برای 90 درجه‌ها)
+            float rx = lx, ry = ly;
+            if (angle == 90) { rx = ly; ry = -lx; }
+            else if (angle == 180) { rx = -lx; ry = -ly; }
+            else if (angle == 270) { rx = -ly; ry = lx; }
+
+            // 3. بازگشت به مختصات جهانی
+            return { x + centerX + rx, y + centerY + ry };
+        };
+
+        auto p1 = transform(x1 - centerX, y1 - centerY);
+        auto p2 = transform(x2 - centerX, y2 - centerY);
+
+        SDL_RenderLine(renderer, p1.first, p1.second, p2.first, p2.second);
+    }
+    // ===================================================
+    // ویژگی‌های جدید که جا افتاده بودند (حتما باید اینجا باشند)
+    // ===================================================
     bool isSelected = false;
+    int angle = 0;           // زاویه چرخش
+    bool isMirrored = false; // قرینه شدن
+
+    // تابع تشخیص کلیک موس روی قطعه
+    virtual bool Contains(float mouseX, float mouseY) {
+        // یک کادر حدودی دور قطعه برای تشخیص کلیک در نظر می‌گیریم
+        return (mouseX >= x - 10 && mouseX <= x + 50 &&
+                mouseY >= y - 10 && mouseY <= y + 50);
+    }
+    // ===================================================
 
     Component(float posX, float posY, ComponentType t)
         : x(posX), y(posY), type(t) {}
@@ -77,17 +118,20 @@ public:
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
         // پین‌ها
-        SDL_RenderLine(renderer, x, y + 20, x + 10, y + 20);
-        SDL_RenderLine(renderer, x + 50, y + 20, x + 60, y + 20);
-        // زیگ‌زاگ مقاومت
-        SDL_RenderLine(renderer, x + 10, y + 20, x + 15, y + 10);
-        SDL_RenderLine(renderer, x + 15, y + 10, x + 25, y + 30);
-        SDL_RenderLine(renderer, x + 25, y + 30, x + 35, y + 10);
-        SDL_RenderLine(renderer, x + 35, y + 10, x + 45, y + 30);
-        SDL_RenderLine(renderer, x + 45, y + 30, x + 50, y + 20);
+        DrawLine(renderer, 0, 20, 10, 20);
+        DrawLine(renderer, 50, 20, 60, 20);
+
+        DrawLine(renderer, 10, 20, 15, 10);
+        DrawLine(renderer, 15, 10, 25, 30);
+        DrawLine(renderer, 25, 30, 35, 10);
+        DrawLine(renderer, 35, 10, 45, 30);
+        DrawLine(renderer, 45, 30, 50, 20);
     }
 };
 
+// ==========================================
+// 2. خازن (دو خط موازی)
+// ==========================================
 // ==========================================
 // 2. خازن (دو خط موازی)
 // ==========================================
@@ -101,11 +145,11 @@ public:
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
         // پین‌های افقی
-        SDL_RenderLine(renderer, x, y + 20, x + 25, y + 20);
-        SDL_RenderLine(renderer, x + 35, y + 20, x + 60, y + 20);
+        DrawLine(renderer, 0, 20, 25, 20);
+        DrawLine(renderer, 35, 20, 60, 20);
         // صفحات موازی خازن (عمودی)
-        SDL_RenderLine(renderer, x + 25, y + 5, x + 25, y + 35);
-        SDL_RenderLine(renderer, x + 35, y + 5, x + 35, y + 35);
+        DrawLine(renderer, 25, 5, 25, 35);
+        DrawLine(renderer, 35, 5, 35, 35);
     }
 };
 
@@ -121,11 +165,11 @@ public:
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
         // خط عمودی ورودی
-        SDL_RenderLine(renderer, x + 20, y, x + 20, y + 15);
+        DrawLine(renderer, 20, 0, 20, 15);
         // خطوط افقی زمین
-        SDL_RenderLine(renderer, x + 5, y + 15, x + 35, y + 15);
-        SDL_RenderLine(renderer, x + 12, y + 23, x + 28, y + 23);
-        SDL_RenderLine(renderer, x + 18, y + 30, x + 22, y + 30);
+        DrawLine(renderer, 5, 15, 35, 15);
+        DrawLine(renderer, 12, 23, 28, 23);
+        DrawLine(renderer, 18, 30, 22, 30);
     }
 };
 
@@ -143,20 +187,20 @@ public:
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
         // پین‌ها
-        SDL_RenderLine(renderer, x, y + 10, x + 15, y + 10);
-        SDL_RenderLine(renderer, x, y + 30, x + 15, y + 30);
-        SDL_RenderLine(renderer, x + 45, y + 20, x + 60, y + 20);
+        DrawLine(renderer, 0, 10, 15, 10);
+        DrawLine(renderer, 0, 30, 15, 30);
+        DrawLine(renderer, 45, 20, 60, 20);
 
         // بدنه گیت AND
-        SDL_RenderLine(renderer, x + 15, y + 5, x + 15, y + 35); // خط صاف چپ
-        SDL_RenderLine(renderer, x + 15, y + 5, x + 30, y + 5);  // بالا
-        SDL_RenderLine(renderer, x + 15, y + 35, x + 30, y + 35);// پایین
+        DrawLine(renderer, 15, 5, 15, 35); // خط صاف چپ
+        DrawLine(renderer, 15, 5, 30, 5);  // بالا
+        DrawLine(renderer, 15, 35, 30, 35);// پایین
 
         // تقریب منحنی سمت راست گیت AND
-        SDL_RenderLine(renderer, x + 30, y + 5, x + 40, y + 12);
-        SDL_RenderLine(renderer, x + 40, y + 12, x + 45, y + 20);
-        SDL_RenderLine(renderer, x + 45, y + 20, x + 40, y + 28);
-        SDL_RenderLine(renderer, x + 40, y + 28, x + 30, y + 35);
+        DrawLine(renderer, 30, 5, 40, 12);
+        DrawLine(renderer, 40, 12, 45, 20);
+        DrawLine(renderer, 45, 20, 40, 28);
+        DrawLine(renderer, 40, 28, 30, 35);
     }
 };
 
@@ -174,23 +218,23 @@ public:
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
 
-        // منحنی پشتی گیت OR (تقریب با 2 خط)
-        SDL_RenderLine(renderer, x + 10, y + 5, x + 20, y + 20);
-        SDL_RenderLine(renderer, x + 20, y + 20, x + 10, y + 35);
+        // منحنی پشتی گیت OR
+        DrawLine(renderer, 10, 5, 20, 20);
+        DrawLine(renderer, 20, 20, 10, 35);
 
         // پین‌ها
-        SDL_RenderLine(renderer, x, y + 10, x + 13, y + 10);
-        SDL_RenderLine(renderer, x, y + 30, x + 13, y + 30);
-        SDL_RenderLine(renderer, x + 50, y + 20, x + 60, y + 20);
+        DrawLine(renderer, 0, 10, 13, 10);
+        DrawLine(renderer, 0, 30, 13, 30);
+        DrawLine(renderer, 50, 20, 60, 20);
 
         // منحنی بالایی و پایینی به سمت نوک (خروجی)
-        SDL_RenderLine(renderer, x + 10, y + 5, x + 35, y + 10);
-        SDL_RenderLine(renderer, x + 35, y + 10, x + 50, y + 20);
-
-        SDL_RenderLine(renderer, x + 10, y + 35, x + 35, y + 30);
-        SDL_RenderLine(renderer, x + 35, y + 30, x + 50, y + 20);
+        DrawLine(renderer, 10, 5, 35, 10);
+        DrawLine(renderer, 35, 10, 50, 20);
+        DrawLine(renderer, 10, 35, 35, 30);
+        DrawLine(renderer, 35, 30, 50, 20);
     }
 };
+
 // ==========================================
 // 6. منبع ولتاژ DC
 // ==========================================
@@ -202,12 +246,17 @@ public:
     }
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
-        SDL_FRect body = { x + 10, y + 10, 20, 20 };
-        SDL_RenderRect(renderer, &body);
-        SDL_RenderLine(renderer, x + 30, y + 20, x + 40, y + 20); // پین خروجی
-        // علامت مثبت داخل منبع
-        SDL_RenderLine(renderer, x + 15, y + 20, x + 25, y + 20);
-        SDL_RenderLine(renderer, x + 20, y + 15, x + 20, y + 25);
+
+        // رسم کادر منبع با 4 خط (برای پشتیبانی از چرخش)
+        DrawLine(renderer, 10, 10, 30, 10);
+        DrawLine(renderer, 30, 10, 30, 30);
+        DrawLine(renderer, 30, 30, 10, 30);
+        DrawLine(renderer, 10, 30, 10, 10);
+
+        // پین خروجی و علامت مثبت داخل منبع
+        DrawLine(renderer, 30, 20, 40, 20);
+        DrawLine(renderer, 15, 20, 25, 20);
+        DrawLine(renderer, 20, 15, 20, 25);
     }
 };
 
@@ -223,12 +272,12 @@ public:
     }
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
-        SDL_RenderLine(renderer, x + 20, y, x + 20, y + 20); // پین بالا
-        SDL_RenderLine(renderer, x + 5, y + 20, x + 35, y + 20); // خط بلند (مثبت)
-        SDL_RenderLine(renderer, x + 12, y + 30, x + 28, y + 30); // خط کوتاه (منفی)
-        SDL_RenderLine(renderer, x + 5, y + 40, x + 35, y + 40); // خط بلند
-        SDL_RenderLine(renderer, x + 12, y + 50, x + 28, y + 50); // خط کوتاه
-        SDL_RenderLine(renderer, x + 20, y + 50, x + 20, y + 60); // پین پایین
+        DrawLine(renderer, 20, 0, 20, 20);   // پین بالا
+        DrawLine(renderer, 5, 20, 35, 20);   // خط بلند (مثبت)
+        DrawLine(renderer, 12, 30, 28, 30);  // خط کوتاه (منفی)
+        DrawLine(renderer, 5, 40, 35, 40);   // خط بلند
+        DrawLine(renderer, 12, 50, 28, 50);  // خط کوتاه
+        DrawLine(renderer, 20, 50, 20, 60);  // پین پایین
     }
 };
 
@@ -243,14 +292,19 @@ public:
     }
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
-        SDL_FRect body = { x + 10, y + 10, 20, 20 };
-        SDL_RenderRect(renderer, &body);
-        SDL_RenderLine(renderer, x + 30, y + 20, x + 40, y + 20);
+
+        // رسم کادر با 4 خط
+        DrawLine(renderer, 10, 10, 30, 10);
+        DrawLine(renderer, 30, 10, 30, 30);
+        DrawLine(renderer, 30, 30, 10, 30);
+        DrawLine(renderer, 10, 30, 10, 10);
+
+        DrawLine(renderer, 30, 20, 40, 20); // پین
         // شکل موج مربعی
-        SDL_RenderLine(renderer, x + 14, y + 25, x + 14, y + 15);
-        SDL_RenderLine(renderer, x + 14, y + 15, x + 22, y + 15);
-        SDL_RenderLine(renderer, x + 22, y + 15, x + 22, y + 25);
-        SDL_RenderLine(renderer, x + 22, y + 25, x + 28, y + 25);
+        DrawLine(renderer, 14, 25, 14, 15);
+        DrawLine(renderer, 14, 15, 22, 15);
+        DrawLine(renderer, 22, 15, 22, 25);
+        DrawLine(renderer, 22, 25, 28, 25);
     }
 };
 
@@ -267,20 +321,20 @@ public:
     }
     bool HandleClick(float mouseX, float mouseY) override {
         if (ContainsPoint(mouseX, mouseY)) {
-            isPressed = !isPressed; // در شبیه‌ساز واقعی این فقط تا زمانی که موس پایین است کار می‌کند
+            isPressed = !isPressed;
             return true;
         }
         return false;
     }
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
-        SDL_RenderLine(renderer, x, y + 20, x + 15, y + 20);
-        SDL_RenderLine(renderer, x + 35, y + 20, x + 50, y + 20);
+        DrawLine(renderer, 0, 20, 15, 20);
+        DrawLine(renderer, 35, 20, 50, 20);
 
         // قسمت دکمه
         float pushOffset = isPressed ? 20 : 10;
-        SDL_RenderLine(renderer, x + 15, y + pushOffset, x + 35, y + pushOffset); // تیغه
-        SDL_RenderLine(renderer, x + 25, y + 5, x + 25, y + pushOffset); // میله دکمه
+        DrawLine(renderer, 15, pushOffset, 35, pushOffset); // تیغه
+        DrawLine(renderer, 25, 5, 25, pushOffset); // میله دکمه
     }
 };
 
@@ -297,18 +351,29 @@ public:
     }
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
-        SDL_FRect body = { x, y, 40, 50 };
-        SDL_RenderRect(renderer, &body); // بدنه سون سگمنت
+        // کادر اصلی سون سگمنت (بدنه)
+        DrawLine(renderer, 0, 0, 40, 0);
+        DrawLine(renderer, 40, 0, 40, 50);
+        DrawLine(renderer, 40, 50, 0, 50);
+        DrawLine(renderer, 0, 50, 0, 0);
+
         // رسم پین‌های پایین
         for(int i=0; i<7; i++) {
-            SDL_RenderLine(renderer, x + 5 + i*5, y + 50, x + 5 + i*5, y + 60);
+            DrawLine(renderer, 5 + i*5, 50, 5 + i*5, 60);
         }
+
         // رسم شکل 8 کم‌رنگ
         SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-        SDL_FRect topLoop = { x + 10, y + 10, 20, 15 };
-        SDL_FRect botLoop = { x + 10, y + 25, 20, 15 };
-        SDL_RenderRect(renderer, &topLoop);
-        SDL_RenderRect(renderer, &botLoop);
+        // مربع بالایی
+        DrawLine(renderer, 10, 10, 30, 10);
+        DrawLine(renderer, 30, 10, 30, 25);
+        DrawLine(renderer, 30, 25, 10, 25);
+        DrawLine(renderer, 10, 25, 10, 10);
+        // مربع پایینی
+        DrawLine(renderer, 10, 25, 30, 25);
+        DrawLine(renderer, 30, 25, 30, 40);
+        DrawLine(renderer, 30, 40, 10, 40);
+        DrawLine(renderer, 10, 40, 10, 25);
     }
 };
 
@@ -324,15 +389,19 @@ public:
     }
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
-        SDL_RenderLine(renderer, x, y + 20, x + 15, y + 20); // ورودی
-        SDL_RenderLine(renderer, x + 45, y + 20, x + 60, y + 20); // خروجی
+        DrawLine(renderer, 0, 20, 15, 20); // ورودی
+        DrawLine(renderer, 45, 20, 60, 20); // خروجی
+
         // مثلث
-        SDL_RenderLine(renderer, x + 15, y + 5, x + 15, y + 35);
-        SDL_RenderLine(renderer, x + 15, y + 5, x + 40, y + 20);
-        SDL_RenderLine(renderer, x + 15, y + 35, x + 40, y + 20);
-        // دایره (حباب) خروجی - تقریب با مربع کوچک
-        SDL_FRect bubble = { x + 40, y + 18, 4, 4 };
-        SDL_RenderRect(renderer, &bubble);
+        DrawLine(renderer, 15, 5, 15, 35);
+        DrawLine(renderer, 15, 5, 40, 20);
+        DrawLine(renderer, 15, 35, 40, 20);
+
+        // دایره (حباب) خروجی با 4 خط
+        DrawLine(renderer, 40, 18, 44, 18);
+        DrawLine(renderer, 44, 18, 44, 22);
+        DrawLine(renderer, 44, 22, 40, 22);
+        DrawLine(renderer, 40, 22, 40, 18);
     }
 };
 
@@ -344,9 +413,12 @@ public:
     GateNANDComponent(float x, float y) : GateANDComponent(x, y) { type = ComponentType::GATE_NAND; label = "NAND"; }
     void Draw(SDL_Renderer* renderer) override {
         GateANDComponent::Draw(renderer); // رسم AND
-        SDL_FRect bubble = { x + 45, y + 18, 4, 4 }; // اضافه کردن حباب خروجی
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
-        SDL_RenderRect(renderer, &bubble);
+        // حباب خروجی
+        DrawLine(renderer, 45, 18, 49, 18);
+        DrawLine(renderer, 49, 18, 49, 22);
+        DrawLine(renderer, 49, 22, 45, 22);
+        DrawLine(renderer, 45, 22, 45, 18);
     }
 };
 
@@ -355,9 +427,12 @@ public:
     GateNORComponent(float x, float y) : GateORComponent(x, y) { type = ComponentType::GATE_NOR; label = "NOR"; }
     void Draw(SDL_Renderer* renderer) override {
         GateORComponent::Draw(renderer); // رسم OR
-        SDL_FRect bubble = { x + 50, y + 18, 4, 4 };
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
-        SDL_RenderRect(renderer, &bubble);
+        // حباب خروجی
+        DrawLine(renderer, 50, 18, 54, 18);
+        DrawLine(renderer, 54, 18, 54, 22);
+        DrawLine(renderer, 54, 22, 50, 22);
+        DrawLine(renderer, 50, 22, 50, 18);
     }
 };
 
@@ -367,12 +442,11 @@ public:
     void Draw(SDL_Renderer* renderer) override {
         GateORComponent::Draw(renderer); // رسم OR
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
-        // اضافه کردن خط منحنی دوم پشت گیت
-        SDL_RenderLine(renderer, x + 5, y + 5, x + 15, y + 20);
-        SDL_RenderLine(renderer, x + 15, y + 20, x + 5, y + 35);
+        // خط منحنی دوم پشت گیت
+        DrawLine(renderer, 5, 5, 15, 20);
+        DrawLine(renderer, 15, 20, 5, 35);
     }
 };
-
 // ==========================================
 // 13. فلیپ‌فلاپ (D Flip-Flop)
 // ==========================================
@@ -387,18 +461,22 @@ public:
     }
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
-        SDL_FRect body = { x + 10, y, 40, 60 };
-        SDL_RenderRect(renderer, &body);
+
+        // کادر اصلی فلیپ‌فلاپ
+        DrawLine(renderer, 10, 0, 50, 0);
+        DrawLine(renderer, 50, 0, 50, 60);
+        DrawLine(renderer, 50, 60, 10, 60);
+        DrawLine(renderer, 10, 60, 10, 0);
 
         // پین‌ها
-        SDL_RenderLine(renderer, x, y + 15, x + 10, y + 15); // D
-        SDL_RenderLine(renderer, x, y + 45, x + 10, y + 45); // CLK
-        SDL_RenderLine(renderer, x + 50, y + 15, x + 60, y + 15); // Q
-        SDL_RenderLine(renderer, x + 50, y + 45, x + 60, y + 45); // Q'
+        DrawLine(renderer, 0, 15, 10, 15); // D
+        DrawLine(renderer, 0, 45, 10, 45); // CLK
+        DrawLine(renderer, 50, 15, 60, 15); // Q
+        DrawLine(renderer, 50, 45, 60, 45); // Q'
 
         // علامت کلاک (مثلث کوچک روی پین CLK)
-        SDL_RenderLine(renderer, x + 10, y + 40, x + 18, y + 45);
-        SDL_RenderLine(renderer, x + 18, y + 45, x + 10, y + 50);
+        DrawLine(renderer, 10, 40, 18, 45);
+        DrawLine(renderer, 18, 45, 10, 50);
     }
 };
 // ==========================================
@@ -415,7 +493,6 @@ public:
     }
 
     bool HandleClick(float mouseX, float mouseY) override {
-        // با کلیک روی کلید، وضعیت آن تغییر می‌کند
         if (ContainsPoint(mouseX, mouseY)) {
             isOpen = !isOpen;
             pins[1].voltage = isOpen ? 0.0f : pins[0].voltage;
@@ -428,15 +505,15 @@ public:
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
 
         // پین‌های ورودی و خروجی
-        SDL_RenderLine(renderer, x, y + 15, x + 15, y + 15);
-        SDL_RenderLine(renderer, x + 35, y + 15, x + 50, y + 15);
+        DrawLine(renderer, 0, 15, 15, 15);
+        DrawLine(renderer, 35, 15, 50, 15);
 
         // تیغه کلید
-        SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255); // رنگ قرمز برای تیغه متحرک
+        SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255);
         if (isOpen) {
-            SDL_RenderLine(renderer, x + 15, y + 15, x + 32, y + 2); // حالت باز
+            DrawLine(renderer, 15, 15, 32, 2); // حالت باز
         } else {
-            SDL_RenderLine(renderer, x + 15, y + 15, x + 35, y + 15); // حالت بسته
+            DrawLine(renderer, 15, 15, 35, 15); // حالت بسته
         }
     }
 };
@@ -459,29 +536,31 @@ public:
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
 
         // پین‌های دو طرف
-        SDL_RenderLine(renderer, x, y + 20, x + 15, y + 20);
-        SDL_RenderLine(renderer, x + 35, y + 20, x + 50, y + 20);
+        DrawLine(renderer, 0, 20, 15, 20);
+        DrawLine(renderer, 35, 20, 50, 20);
 
         // مثلث نماد دیود
-        SDL_RenderLine(renderer, x + 15, y + 10, x + 15, y + 30);
-        SDL_RenderLine(renderer, x + 15, y + 10, x + 35, y + 20);
-        SDL_RenderLine(renderer, x + 15, y + 30, x + 35, y + 20);
+        DrawLine(renderer, 15, 10, 15, 30);
+        DrawLine(renderer, 15, 10, 35, 20);
+        DrawLine(renderer, 15, 30, 35, 20);
 
         // خط صاف کاتد
-        SDL_RenderLine(renderer, x + 35, y + 10, x + 35, y + 30);
+        DrawLine(renderer, 35, 10, 35, 30);
 
-        // فلش‌های نور (نماد LED)
-        SDL_RenderLine(renderer, x + 25, y + 8, x + 30, y + 2);
-        SDL_RenderLine(renderer, x + 30, y + 8, x + 35, y + 2);
+        // فلش‌های نور
+        DrawLine(renderer, 25, 8, 30, 2);
+        DrawLine(renderer, 30, 8, 35, 2);
 
-        // اگر روشن بود، داخل آن رنگی شود
+        // اگر روشن بود، داخل آن با کشیدن 8 خط موازی رنگی می‌شود (تا با چرخش هماهنگ باشد)
         if (isOn) {
             SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 255);
-            SDL_FRect light = { x + 18, y + 16, 8, 8 };
-            SDL_RenderFillRect(renderer, &light);
+            for(int i = 0; i < 8; i++) {
+                DrawLine(renderer, 18, 16 + i, 26, 16 + i);
+            }
         }
     }
 };
+
 // ==========================================
 // 16. وضعیت منطقی (Logic State 0/1)
 // ==========================================
@@ -496,37 +575,44 @@ public:
 
     bool HandleClick(float mouseX, float mouseY) override {
         if (ContainsPoint(mouseX, mouseY)) {
-            state = !state; // تغییر وضعیت بین صفر و یک با کلیک
-            pins[0].voltage = state ? 5.0f : 0.0f; // تغییر ولتاژ پین
+            state = !state;
+            pins[0].voltage = state ? 5.0f : 0.0f;
             return true;
         }
         return false;
     }
 
     void Draw(SDL_Renderer* renderer) override {
-        // رسم پس‌زمینه قطعه
+        // رسم پس‌زمینه قطعه (با 30 خط موازی برای پشتیبانی کامل از چرخش!)
         SDL_SetRenderDrawColor(renderer, isSelected ? 150 : 220, isSelected ? 200 : 220, isSelected ? 255 : 220, 255);
-        SDL_FRect body = { x, y, 30, 30 };
-        SDL_RenderFillRect(renderer, &body);
+        for(int i = 0; i <= 30; i++) {
+            DrawLine(renderer, 0, i, 30, i);
+        }
 
         // رسم حاشیه
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderRect(renderer, &body);
+        DrawLine(renderer, 0, 0, 30, 0);
+        DrawLine(renderer, 30, 0, 30, 30);
+        DrawLine(renderer, 30, 30, 0, 30);
+        DrawLine(renderer, 0, 30, 0, 0);
 
         // رسم پین خروجی
-        SDL_RenderLine(renderer, x + 30, y + 15, x + 40, y + 15);
+        DrawLine(renderer, 30, 15, 40, 15);
 
-        // رسم عدد 0 یا 1 داخل کادر با خطوط (بدون نیاز به فونت برای سادگی رندر)
-        SDL_SetRenderDrawColor(renderer, 0, 0, 200, 255); // رنگ آبی برای عدد
+        // رسم عدد
+        SDL_SetRenderDrawColor(renderer, 0, 0, 200, 255);
         if (state) {
             // رسم عدد '1'
-            SDL_RenderLine(renderer, x + 15, y + 5, x + 15, y + 25);
-            SDL_RenderLine(renderer, x + 10, y + 10, x + 15, y + 5);
+            DrawLine(renderer, 15, 5, 15, 25);
+            DrawLine(renderer, 10, 10, 15, 5);
         } else {
-            // رسم عدد '0'
-            SDL_FRect zeroRect = { x + 10, y + 5, 10, 20 };
-            SDL_RenderRect(renderer, &zeroRect);
+            // رسم عدد '0' (کادر دور توخالی)
+            DrawLine(renderer, 10, 5, 20, 5);
+            DrawLine(renderer, 20, 5, 20, 25);
+            DrawLine(renderer, 20, 25, 10, 25);
+            DrawLine(renderer, 10, 25, 10, 5);
         }
     }
 };
+
 #endif

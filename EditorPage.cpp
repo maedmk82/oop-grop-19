@@ -3,7 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-
+#include <algorithm>
 // در صورتی که TextRenderer دارید آن را اینکلود کنید تا نام قطعات روی دکمه‌ها نوشته شود
 // #include "TextRenderer.h"
 
@@ -171,9 +171,32 @@ void EditorPage::Draw(SDL_Renderer* renderer)
         // تست خطایابی: رسم یک مربع قرمز پشت هر قطعه برای اطمینان
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_FRect debugBox = { comp->x, comp->y, 20, 20 };
+        if (comp->isSelected) {
+            SDL_SetRenderDrawColor(renderer, 0, 150, 255, 80);
+            SDL_FRect selRect = { comp->x - 5, comp->y - 5, 50, 50 };
+            SDL_RenderFillRect(renderer, &selRect);
+            SDL_SetRenderDrawColor(renderer, 0, 50, 255, 255);
+            SDL_RenderRect(renderer, &selRect); // حاشیه آبی تیره
+        }
 
         // نام تابع در SDL3 اصلاح شد
         SDL_RenderRect(renderer, &debugBox);
+    }
+    // رسم مستطیل انتخاب گروهی
+    // رسم مستطیل انتخاب گروهی
+    if (isSelectingBox) {
+        SDL_SetRenderDrawColor(renderer, 0, 150, 255, 50); // آبی خیلی شفاف
+
+        // اضافه کردن (float) قبل از currentMouseX و currentMouseY
+        float rx = std::min(selStartX, (float)currentMouseX);
+        float ry = std::min(selStartY, (float)currentMouseY);
+        float rw = std::abs(selStartX - (float)currentMouseX);
+        float rh = std::abs(selStartY - (float)currentMouseY);
+
+        SDL_FRect selBox = { rx, ry, rw, rh };
+        SDL_RenderFillRect(renderer, &selBox);
+        SDL_SetRenderDrawColor(renderer, 0, 150, 255, 255);
+        SDL_RenderRect(renderer, &selBox);
     }
     // =========================================================
     // =========================================================
@@ -193,66 +216,75 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     menu.Draw(renderer);
     search.Draw(renderer);
 
-    // ------------------------------------
-    // رسم دکمه Undo در بالای صفحه
-    // ------------------------------------
+    // =======================================================
+    // رسم دکمه‌های نوار ابزار در بالای صفحه (از چپ به راست)
+    // =======================================================
+    SDL_Color black = {0, 0, 0, 255};
+
+    // ۱. دکمه Rotate (چرخش) - شروع از مختصات امن 450
+    SDL_SetRenderDrawColor(renderer, 200, 220, 255, 255);
+    SDL_FRect rotBtn = { 450, 10, 60, 30 };
+    SDL_RenderFillRect(renderer, &rotBtn);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &rotBtn);
+    SDL_Texture* tRot = TextRenderer::CreateText(renderer, "Rot 90", black);
+    if(tRot) { SDL_FRect p = {455, 15, 50, 20}; SDL_RenderTexture(renderer, tRot, NULL, &p); SDL_DestroyTexture(tRot); }
+
+    // ۲. دکمه Mirror (قرینه)
+    SDL_SetRenderDrawColor(renderer, 255, 220, 200, 255);
+    SDL_FRect mirBtn = { 520, 10, 60, 30 };
+    SDL_RenderFillRect(renderer, &mirBtn);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &mirBtn);
+    SDL_Texture* tMir = TextRenderer::CreateText(renderer, "Mirror", black);
+    if(tMir) { SDL_FRect p = {525, 15, 50, 20}; SDL_RenderTexture(renderer, tMir, NULL, &p); SDL_DestroyTexture(tMir); }
+
+    // ۳. دکمه Delete (حذف)
+    SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
+    SDL_FRect delBtn = { 590, 10, 60, 30 };
+    SDL_RenderFillRect(renderer, &delBtn);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &delBtn);
+    SDL_Texture* tDel = TextRenderer::CreateText(renderer, "Delete", black);
+    if(tDel) { SDL_FRect p = {595, 15, 50, 20}; SDL_RenderTexture(renderer, tDel, NULL, &p); SDL_DestroyTexture(tDel); }
+
+    // ۴. دکمه Undo
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-    SDL_FRect undoBtn = { 450, 10, 80, 30 };
+    SDL_FRect undoBtn = { 660, 10, 70, 30 };
     SDL_RenderFillRect(renderer, &undoBtn);
-
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &undoBtn); // حاشیه
-
-    SDL_Color black = {0,0,0,255};
+    SDL_RenderRect(renderer, &undoBtn);
     SDL_Texture* txtUndo = TextRenderer::CreateText(renderer, "< Undo", black);
-    if (txtUndo) {
-        SDL_FRect posU = { 460, 15, 60, 20 };
-        SDL_RenderTexture(renderer, txtUndo, NULL, &posU);
-        SDL_DestroyTexture(txtUndo);
-    }
+    if (txtUndo) { SDL_FRect p = {665, 15, 60, 20}; SDL_RenderTexture(renderer, txtUndo, NULL, &p); SDL_DestroyTexture(txtUndo); }
 
-    // ------------------------------------
-    // رسم دکمه Redo در بالای صفحه
-    // ------------------------------------
+    // ۵. دکمه Redo
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-    SDL_FRect redoBtn = { 540, 10, 80, 30 };
+    SDL_FRect redoBtn = { 740, 10, 70, 30 };
     SDL_RenderFillRect(renderer, &redoBtn);
-
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &redoBtn); // حاشیه
-
+    SDL_RenderRect(renderer, &redoBtn);
     SDL_Texture* txtRedo = TextRenderer::CreateText(renderer, "Redo >", black);
-    if (txtRedo) {
-        SDL_FRect posR = { 550, 15, 60, 20 };
-        SDL_RenderTexture(renderer, txtRedo, NULL, &posR);
-        SDL_DestroyTexture(txtRedo);
-    }
+    if (txtRedo) { SDL_FRect p = {745, 15, 60, 20}; SDL_RenderTexture(renderer, txtRedo, NULL, &p); SDL_DestroyTexture(txtRedo); }
 
-    // ------------------------------------
-    // رسم دکمه Export Image در بالای صفحه
-    // ------------------------------------
-    SDL_SetRenderDrawColor(renderer, 200, 255, 200, 255); // رنگ سبز ملایم
-    SDL_FRect exportBtn = { 630, 10, 120, 30 };
+
+    // ۶. دکمه Export Image
+    SDL_SetRenderDrawColor(renderer, 200, 255, 200, 255);
+    SDL_FRect exportBtn = { 820, 10, 110, 30 };
     SDL_RenderFillRect(renderer, &exportBtn);
-
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &exportBtn); // حاشیه
-
+    SDL_RenderRect(renderer, &exportBtn);
     SDL_Texture* txtExport = TextRenderer::CreateText(renderer, "Export Image", black);
-    if (txtExport) {
-        SDL_FRect posE = { 635, 15, 110, 20 };
-        SDL_RenderTexture(renderer, txtExport, NULL, &posE);
-        SDL_DestroyTexture(txtExport);
-    }
+    if (txtExport) { SDL_FRect p = {825, 15, 100, 20}; SDL_RenderTexture(renderer, txtExport, NULL, &p); SDL_DestroyTexture(txtExport); }
 
-    // ------------------------------------
-    // عملیات گرفتن عکس (باید در انتهای تابع Draw باشد)
-    // ------------------------------------
+    // =======================================================
+    // این بخش پاک شده بود! (باید حتماً در انتهای Draw باشد)
+    // =======================================================
     if (exportRequested) {
         ExportToImage(renderer);
-        exportRequested = false;
+        exportRequested = false; // خاموش کردن پرچم تا صدها عکس پشت سر هم نگیرد
     }
-} // <--- این آکولادِ پایانِ تابع Draw است
+
+} // <--- این آکولاد پایان تابع Draw است
 
 
 //-----------------------------------------
@@ -267,20 +299,47 @@ EditorMenuAction EditorPage::HandleClick(int x, int y)
     // بررسی کلیک روی منوی بالا و سرچ باکس
     EditorMenuAction action = menu.HandleClick(x, y);
     search.HandleClick(x, y);
-    // بررسی کلیک روی دکمه Export Image
-    if (x >= 630 && x <= 750 && y >= 10 && y <= 40) {
-        exportRequested = true; // روشن کردن پرچم برای گرفتن عکس
+    // =======================================================
+    // بررسی کلیک روی نوار ابزار (Toolbar)
+    // =======================================================
+
+    // ۱. کلیک روی چرخش (Rotate)
+    if (x >= 450 && x <= 510 && y >= 10 && y <= 40) {
+        SaveCurrentStateForUndo();
+        for (auto& c : components) if (c->isSelected) c->angle = (c->angle + 90) % 360;
         return (EditorMenuAction)0;
     }
-    // بررسی کلیک روی Undo
-    if (x >= 450 && x <= 530 && y >= 10 && y <= 40) {
+
+    // ۲. کلیک روی قرینه (Mirror)
+    if (x >= 520 && x <= 580 && y >= 10 && y <= 40) {
+        SaveCurrentStateForUndo();
+        for (auto& c : components) if (c->isSelected) c->isMirrored = !c->isMirrored;
+        return (EditorMenuAction)0;
+    }
+
+    // ۳. کلیک روی حذف (Delete)
+    if (x >= 590 && x <= 650 && y >= 10 && y <= 40) {
+        SaveCurrentStateForUndo();
+        components.erase(std::remove_if(components.begin(), components.end(),
+            [](const std::unique_ptr<Component>& c) { return c->isSelected; }), components.end());
+        return (EditorMenuAction)0;
+    }
+
+    // ۴. کلیک روی Undo
+    if (x >= 660 && x <= 730 && y >= 10 && y <= 40) {
         Undo();
         return (EditorMenuAction)0;
     }
 
-    // بررسی کلیک روی Redo
-    if (x >= 540 && x <= 620 && y >= 10 && y <= 40) {
+    // ۵. کلیک روی Redo
+    if (x >= 740 && x <= 810 && y >= 10 && y <= 40) {
         Redo();
+        return (EditorMenuAction)0;
+    }
+
+    // ۶. کلیک روی Export Image
+    if (x >= 820 && x <= 930 && y >= 10 && y <= 40) {
+        exportRequested = true;
         return (EditorMenuAction)0;
     }
     // ۱. بررسی کلیک روی نوار ابزار (Sidebar) برای انتخاب قطعه از لیست پویا
@@ -394,15 +453,38 @@ EditorMenuAction EditorPage::HandleClick(int x, int y)
             }
         }
     }
+    // اگر در حالت قرار دادن قطعه جدید نیستیم:
+    if (!isPlacingMode && x >= 100 && y >= 50) {
+        bool clickedOnComponent = false;
+
+        // چک میکنیم آیا روی قطعه‌ای کلیک شده؟ (از آخر به اول تا قطعه رویی انتخاب شود)
+        for (auto it = components.rbegin(); it != components.rend(); ++it) {
+            if ((*it)->Contains(x, y)) {
+                clickedOnComponent = true;
+                if (!(*it)->isSelected) { // اگر از قبل انتخاب نشده بود
+                    for (auto& c : components) c->isSelected = false; // بقیه را از انتخاب در بیار
+                    (*it)->isSelected = true; // این یکی را انتخاب کن
+                }
+                isDragging = true;
+                lastMouseX = x;
+                lastMouseY = y;
+                break;
+            }
+        }
+
+        // اگر روی فضای خالی کلیک شده بود، مستطیل انتخاب را شروع کن
+        if (!clickedOnComponent) {
+            for (auto& c : components) c->isSelected = false;
+            isSelectingBox = true;
+            selStartX = x;
+            selStartY = y;
+        }
+    }
 
     return action;
 }
 
-void EditorPage::HandleMouseMotion(int x, int y)
-{
-    currentMouseX = x;
-    currentMouseY = y;
-}
+
 
 void EditorPage::HandleKeyboard(SDL_Event event)
 {
@@ -424,6 +506,9 @@ void EditorPage::ClearWorkspace()
 //-----------------------------------------
 // Save Workspace (ذخیره قطعات در فایل)
 //-----------------------------------------
+//-----------------------------------------
+// Save Workspace (ذخیره قطعات در فایل)
+//-----------------------------------------
 void EditorPage::SaveWorkspace(const std::string& filepath)
 {
     std::ofstream file(filepath);
@@ -432,9 +517,10 @@ void EditorPage::SaveWorkspace(const std::string& filepath)
         return;
     }
 
-    // ذخیره هر قطعه: ابتدا نوع قطعه (به صورت عدد)، سپس X و Y
+    // تغییر مهم: حالا زاویه و وضعیت قرینه هم در فایل متنی ذخیره می‌شوند
     for (const auto& comp : components) {
-        file << (int)comp->type << " " << comp->x << " " << comp->y << "\n";
+        file << (int)comp->type << " " << comp->x << " " << comp->y << " "
+             << comp->angle << " " << comp->isMirrored << "\n";
     }
 
     file.close();
@@ -454,11 +540,12 @@ void EditorPage::LoadWorkspace(const std::string& filepath)
         return;
     }
 
-    int typeInt;
+    int typeInt, angle;
     float x, y;
+    bool isMirrored;
 
-    // خواندن خط به خط فایل
-    while (file >> typeInt >> x >> y)
+    // تغییر مهم: خواندن زاویه و قرینه علاوه بر مختصات
+    while (file >> typeInt >> x >> y >> angle >> isMirrored)
     {
         ComponentType type = (ComponentType)typeInt;
 
@@ -481,6 +568,12 @@ void EditorPage::LoadWorkspace(const std::string& filepath)
         else if (type == ComponentType::GATE_NOR) components.push_back(std::make_unique<GateNORComponent>(x, y));
         else if (type == ComponentType::GATE_XOR) components.push_back(std::make_unique<GateXORComponent>(x, y));
         else if (type == ComponentType::FLIP_FLOP_D) components.push_back(std::make_unique<FlipFlopDComponent>(x, y));
+
+        // اعمال زاویه و قرینه به قطعه‌ای که همین الان ساخته شد
+        if (!components.empty()) {
+            components.back()->angle = angle;
+            components.back()->isMirrored = isMirrored;
+        }
     }
 
     file.close();
@@ -490,12 +583,17 @@ void EditorPage::LoadWorkspace(const std::string& filepath)
 // منطق Undo و Redo
 // ========================================================
 
+// ========================================================
+// منطق Undo و Redo
+// ========================================================
+
 std::string EditorPage::SaveStateToString()
 {
     std::stringstream ss;
-    // ذخیره تمام قطعات دقیقاً مثل ذخیره در فایل
+    // تغییر مهم: زاویه و قرینه به استرینگِ رم (حافظه موقت) هم اضافه شدند
     for (const auto& comp : components) {
-        ss << (int)comp->type << " " << comp->x << " " << comp->y << "\n";
+        ss << (int)comp->type << " " << comp->x << " " << comp->y << " "
+           << comp->angle << " " << comp->isMirrored << "\n";
     }
     return ss.str();
 }
@@ -505,11 +603,12 @@ void EditorPage::LoadStateFromString(const std::string& state)
     ClearWorkspace(); // پاک کردن صفحه فعلی
     std::stringstream ss(state);
 
-    int typeInt;
+    int typeInt, angle;
     float x, y;
+    bool isMirrored;
 
-    // خواندن قطعات از روی متن موجود در رم
-    while (ss >> typeInt >> x >> y)
+    // خواندن قطعات و زوایا از روی متن موجود در رم
+    while (ss >> typeInt >> x >> y >> angle >> isMirrored)
     {
         ComponentType type = (ComponentType)typeInt;
 
@@ -531,6 +630,12 @@ void EditorPage::LoadStateFromString(const std::string& state)
         else if (type == ComponentType::GATE_NOR) components.push_back(std::make_unique<GateNORComponent>(x, y));
         else if (type == ComponentType::GATE_XOR) components.push_back(std::make_unique<GateXORComponent>(x, y));
         else if (type == ComponentType::FLIP_FLOP_D) components.push_back(std::make_unique<FlipFlopDComponent>(x, y));
+
+        // اعمال زاویه و قرینه به قطعه
+        if (!components.empty()) {
+            components.back()->angle = angle;
+            components.back()->isMirrored = isMirrored;
+        }
     }
 }
 
@@ -601,4 +706,49 @@ void EditorPage::ExportToImage(SDL_Renderer* renderer)
     } else {
         std::cout << "Export Failed (Could not read pixels): " << SDL_GetError() << std::endl;
     }
+}
+void EditorPage::HandleMouseMove(int x, int y) {
+    currentMouseX = x; currentMouseY = y;
+
+    if (isDragging) {
+        float dx = x - lastMouseX;
+        float dy = y - lastMouseY;
+        for (auto& c : components) {
+            if (c->isSelected) {
+                c->x += dx;
+                c->y += dy;
+            }
+        }
+        lastMouseX = x; lastMouseY = y;
+    }
+}
+
+void EditorPage::HandleMouseRelease(int x, int y) {
+    if (isDragging) {
+        SaveCurrentStateForUndo();
+        for (auto& c : components) {
+            if (c->isSelected) {
+                c->x = std::round(c->x / 20.0f) * 20.0f;
+                c->y = std::round(c->y / 20.0f) * 20.0f;
+            }
+        }
+        isDragging = false;
+    }
+
+    if (isSelectingBox) {
+        isSelectingBox = false;
+
+        // اینجا هم (float) را قبل از currentMouseX و currentMouseY اضافه کنید:
+        float rx = std::min(selStartX, (float)currentMouseX);
+        float ry = std::min(selStartY, (float)currentMouseY);
+        float rw = std::abs(selStartX - (float)currentMouseX);
+        float rh = std::abs(selStartY - (float)currentMouseY);
+
+        for (auto& c : components) {
+            if (c->x >= rx && c->x <= rx + rw && c->y >= ry && c->y <= ry + rh) {
+                c->isSelected = true;
+            }
+        }
+    }
+
 }

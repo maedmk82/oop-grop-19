@@ -1,170 +1,236 @@
 #include "OpenProject.h"
-#include "ProjectManager.h"
 #include "TextRenderer.h"
-#include "Page.h"
-#include "EditorPage.h" // <--- ۱. اضافه کردن هدر ادیتور
-
-#include <SDL3/SDL.h>
 #include <iostream>
-#include <vector>
-#include <string>
 
-#include <windows.h>
-#include <commdlg.h>
 
-extern int selectedProjectIndex;
-extern Project currentProject;
-extern Page CurrentPage;
-extern EditorPage* editor; // <--- ۲. اضافه کردن اشاره‌گر به ادیتور
+std::vector<Project> openProjects;
 
-// ----------------------------------------------------
-// تابع بومی ویندوز برای باز کردن پنجره انتخاب فایل
-// ----------------------------------------------------
-std::string OpenNativeOpenDialog()
+
+//--------------------------------
+// خواندن پروژه های ذخیره شده
+//--------------------------------
+
+void LoadOpenProjects()
 {
-    OPENFILENAMEA ofn;
-    CHAR szFile[260] = {0};
-
-    ZeroMemory(&ofn, sizeof(OPENFILENAME));
-    ofn.lStructSize = sizeof(OPENFILENAME);
-    ofn.hwndOwner = NULL;
-    ofn.lpstrFile = szFile;
-    ofn.nMaxFile = sizeof(szFile);
-
-    ofn.lpstrFilter = "Proteus Clone Project (*.pro)\0*.pro\0All Files (*.*)\0*.*\0";
-    ofn.nFilterIndex = 1;
-    ofn.lpstrFileTitle = NULL;
-    ofn.nMaxFileTitle = 0;
-    ofn.lpstrInitialDir = NULL;
-
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-    ofn.lpstrDefExt = "pro";
-
-    if (GetOpenFileNameA(&ofn) == TRUE) {
-        return std::string(ofn.lpstrFile);
-    }
-
-    return "";
+    openProjects = LoadProjects();
 }
 
-//--------------------------------------------------
-// Draw Open Project
-//--------------------------------------------------
+
+
+//--------------------------------
+// رسم صفحه Open Project
+//--------------------------------
 
 void DrawOpenProject(SDL_Renderer* renderer)
 {
-    SDL_Color color = { 0, 0, 0, 255 };
 
-    // Background
-    SDL_SetRenderDrawColor(renderer, 235, 235, 235, 255);
-    SDL_FRect background = { 0, 0, 950, 600 };
-    SDL_RenderFillRect(renderer, &background);
+    // پس زمینه
 
-    // Title
-    SDL_Texture* title = TextRenderer::CreateText(renderer, "Open Project", color);
+    SDL_SetRenderDrawColor(renderer,
+                           230,
+                           230,
+                           230,
+                           255);
+
+
+    SDL_FRect background =
+    {
+        50,
+        60,
+        850,
+        450
+    };
+
+
+    SDL_RenderFillRect(renderer,&background);
+
+
+
+    SDL_Color color={0,0,0,255};
+
+
+
+    // عنوان
+
+    SDL_Texture* title =
+        TextRenderer::CreateText(renderer,
+                                 "Open Project",
+                                 color);
+
+
+
     if(title)
     {
-        SDL_FRect pos = { 80, 50, 200, 30 };
-        SDL_RenderTexture(renderer, title, NULL, &pos);
+        SDL_FRect pos =
+        {
+            80,
+            80,
+            180,
+            30
+        };
+
+
+        SDL_RenderTexture(renderer,
+                          title,
+                          NULL,
+                          &pos);
+
+
         SDL_DestroyTexture(title);
     }
 
-    // Browse Button
-    SDL_SetRenderDrawColor(renderer, 180, 210, 255, 255);
-    SDL_FRect browseBtn = { 650, 50, 200, 40 };
-    SDL_RenderFillRect(renderer, &browseBtn);
 
-    SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
-    SDL_RenderRect(renderer, &browseBtn);
 
-    SDL_Texture* browseTxt = TextRenderer::CreateText(renderer, "Browse Computer...", color);
-    if(browseTxt)
+    //--------------------------------
+    // نمایش لیست پروژه ها
+    //--------------------------------
+
+
+    int y = 140;
+
+
+    for(int i=0;i<openProjects.size();i++)
     {
-        SDL_FRect pos = { 665, 60, 170, 20 };
-        SDL_RenderTexture(renderer, browseTxt, NULL, &pos);
-        SDL_DestroyTexture(browseTxt);
-    }
 
-    // Recent Projects
-    std::vector<Project> list = GetRecentProjects();
+        // کادر پروژه
 
-    for(int i = 0; i < (int)list.size() && i < 10; i++)
-    {
-        float y = 120 + i * 45;
+        SDL_SetRenderDrawColor(renderer,
+                               255,
+                               255,
+                               255,
+                               255);
 
-        SDL_SetRenderDrawColor(renderer, 210, 210, 210, 255);
-        SDL_FRect box = { 100, y, 500, 35 };
-        SDL_RenderFillRect(renderer, &box);
 
-        SDL_Texture* txt = TextRenderer::CreateText(renderer, list[i].name.c_str(), color);
-        if(txt)
+        SDL_FRect box =
         {
-            SDL_FRect pos = { 115, y + 7, 350, 22 };
-            SDL_RenderTexture(renderer, txt, NULL, &pos);
-            SDL_DestroyTexture(txt);
+            100,
+            (float)y,
+            700,
+            50
+        };
+
+
+        SDL_RenderFillRect(renderer,&box);
+
+
+
+        // متن نام پروژه
+
+        SDL_Texture* name =
+            TextRenderer::CreateText(renderer,
+                                     openProjects[i].name.c_str(),
+                                     color);
+
+
+
+        if(name)
+        {
+
+            SDL_FRect textPos =
+            {
+                120,
+                (float)y+15,
+                250,
+                25
+            };
+
+
+            SDL_RenderTexture(renderer,
+                              name,
+                              NULL,
+                              &textPos);
+
+
+            SDL_DestroyTexture(name);
+
         }
+
+
+
+        // سایز صفحه
+
+        std::string size;
+
+
+        if(openProjects[i].pageSize==3)
+            size="A3";
+        else
+            size="A4";
+
+
+
+        SDL_Texture* sizeText =
+            TextRenderer::CreateText(renderer,
+                                     size.c_str(),
+                                     color);
+
+
+
+        if(sizeText)
+        {
+
+            SDL_FRect sizePos =
+            {
+                450,
+                (float)y+15,
+                80,
+                25
+            };
+
+
+            SDL_RenderTexture(renderer,
+                              sizeText,
+                              NULL,
+                              &sizePos);
+
+
+            SDL_DestroyTexture(sizeText);
+
+        }
+
+
+
+        y+=60;
+
     }
+
 }
 
 
-//--------------------------------------------------
-// Click on Project
-//--------------------------------------------------
 
-void HandleOpenProjectClick(int x, int y)
+//--------------------------------
+// کلیک روی پروژه
+//--------------------------------
+
+void HandleOpenProjectClick(int x,int y)
 {
-    // ۱. بررسی کلیک روی دکمه Browse Computer
-    if(x >= 650 && x <= 850 && y >= 50 && y <= 90)
+
+    int startY=140;
+
+
+    for(int i=0;i<openProjects.size();i++)
     {
-        std::string fullPath = OpenNativeOpenDialog();
 
-        if(!fullPath.empty())
+        if(x>=100 && x<=800 &&
+           y>=startY &&
+           y<=startY+50)
         {
-            size_t lastSlash = fullPath.find_last_of("\\/");
-            if(lastSlash != std::string::npos) {
-                currentProject.name = fullPath.substr(lastSlash + 1);
-            } else {
-                currentProject.name = fullPath;
-            }
 
-            if(OpenProject(currentProject))
-            {
-                // *** پاک کردن صفحه قبل از ورود به ادیتور ***
-                if (editor) {
-                    editor->ClearWorkspace();
-                }
+            std::cout<<"Open Project : "
+                     <<openProjects[i].name
+                     <<std::endl;
 
-                CurrentPage = EDITOR_PAGE;
-                std::cout << "Opened From Computer: " << fullPath << std::endl;
-            }
-        }
-        return;
-    }
 
-    // ۲. بررسی کلیک روی لیست پروژه‌های اخیر (Recent Projects)
-    std::vector<Project> projects = GetRecentProjects();
+            // اینجا بعداً صفحه شماتیک باز می‌شود
 
-    for(int i = 0; i < (int)projects.size() && i < 10; i++)
-    {
-        float yPos = 120 + i * 45;
 
-        if(x >= 100 && x <= 600 && y >= yPos && y <= yPos + 35)
-        {
-            selectedProjectIndex = i;
-            currentProject = projects[i];
-
-            if(OpenProject(currentProject))
-            {
-                // *** پاک کردن صفحه قبل از ورود به ادیتور ***
-                if (editor) {
-                    editor->ClearWorkspace();
-                }
-
-                CurrentPage = EDITOR_PAGE;
-            }
-
-            std::cout << "Opening Recent Project : " << currentProject.name << std::endl;
             return;
+
         }
+
+
+        startY+=60;
+
     }
+
 }

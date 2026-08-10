@@ -3,19 +3,6 @@
 
 #include <SDL3/SDL.h>
 
-enum EditorMenuAction
-{
-    EDITOR_NO_ACTION,
-
-    EDITOR_NEW_PROJECT,
-
-    EDITOR_OPEN_PROJECT,
-
-    EDITOR_SAVE_PROJECT,
-
-    EDITOR_SAVE_AS
-};
-
 class EditorMenu
 {
 private:
@@ -26,7 +13,7 @@ public:
 
     void Draw(SDL_Renderer* renderer);
 
-    EditorMenuAction HandleClick(int x, int y);
+    void HandleClick(int x, int y);
 };
 
 #endif

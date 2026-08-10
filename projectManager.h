@@ -9,19 +9,20 @@ struct Project
 {
     std::string name;
     std::string path;
-    std::string pageSize;
+    int pageSize;
 };
 
 
-void LoadProjects();
+// ذخیره پروژه جدید
+void SaveProject(Project project);
 
-void SaveProject(const Project& project);
 
-void SaveProjectAs(const Project& project);
-
+// گرفتن 5 پروژه آخر
 std::vector<Project> GetRecentProjects();
 
-bool OpenProject(const Project& project);
+
+// خواندن همه پروژه های ذخیره شده
+std::vector<Project> LoadProjects();
 
 
 #endif

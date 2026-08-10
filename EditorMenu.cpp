@@ -1,21 +1,22 @@
 #include "EditorMenu.h"
 #include "TextRenderer.h"
 
-
 EditorMenu::EditorMenu()
 {
     fileOpen = false;
 }
 
+//-----------------------------------------
+// Draw
+//-----------------------------------------
 
 void EditorMenu::Draw(SDL_Renderer* renderer)
 {
-    SDL_Color black = {0, 0, 0, 255};
+    SDL_Color black = {0,0,0,255};
 
-
-    // =====================================
+    //-----------------------------------------
     // نوار بالای Editor
-    // =====================================
+    //-----------------------------------------
 
     SDL_SetRenderDrawColor(
         renderer,
@@ -36,9 +37,9 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
     SDL_RenderFillRect(renderer, &bar);
 
 
-    // =====================================
-    // متن File
-    // =====================================
+    //-----------------------------------------
+    // File
+    //-----------------------------------------
 
     SDL_Texture* fileText =
         TextRenderer::CreateText(
@@ -53,8 +54,8 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
         {
             15,
             8,
-            40,
-            25
+            50,
+            24
         };
 
         SDL_RenderTexture(
@@ -68,9 +69,51 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
     }
 
 
-    // =====================================
-    // متن Search
-    // =====================================
+    //-----------------------------------------
+    // Search Box
+    //-----------------------------------------
+
+    SDL_SetRenderDrawColor(
+        renderer,
+        255,
+        255,
+        255,
+        255
+    );
+
+    SDL_FRect searchBox =
+    {
+        100,
+        5,
+        350,
+        30
+    };
+
+    SDL_RenderFillRect(
+        renderer,
+        &searchBox
+    );
+
+
+    // Border
+
+    SDL_SetRenderDrawColor(
+        renderer,
+        130,
+        130,
+        130,
+        255
+    );
+
+    SDL_RenderRect(
+        renderer,
+        &searchBox
+    );
+
+
+    //-----------------------------------------
+    // Search Text
+    //-----------------------------------------
 
     SDL_Texture* searchText =
         TextRenderer::CreateText(
@@ -83,10 +126,10 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
     {
         SDL_FRect pos =
         {
-            500,
-            8,
-            60,
-            25
+            115,
+            10,
+            70,
+            20
         };
 
         SDL_RenderTexture(
@@ -100,9 +143,9 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
     }
 
 
-    // =====================================
-    // منوی File
-    // =====================================
+    //-----------------------------------------
+    // File Menu
+    //-----------------------------------------
 
     if(fileOpen)
     {
@@ -119,7 +162,7 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
             0,
             40,
             180,
-            120
+            160
         };
 
         SDL_RenderFillRect(
@@ -128,7 +171,27 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
         );
 
 
+        //-----------------------------------------
+        // Border
+        //-----------------------------------------
+
+        SDL_SetRenderDrawColor(
+            renderer,
+            150,
+            150,
+            150,
+            255
+        );
+
+        SDL_RenderRect(
+            renderer,
+            &menu
+        );
+
+
+        //-----------------------------------------
         // New Project
+        //-----------------------------------------
 
         SDL_Texture* newText =
             TextRenderer::CreateText(
@@ -142,7 +205,7 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
             SDL_FRect pos =
             {
                 15,
-                50,
+                48,
                 140,
                 25
             };
@@ -158,7 +221,9 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
         }
 
 
+        //-----------------------------------------
         // Open Project
+        //-----------------------------------------
 
         SDL_Texture* openText =
             TextRenderer::CreateText(
@@ -172,7 +237,7 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
             SDL_FRect pos =
             {
                 15,
-                90,
+                88,
                 140,
                 25
             };
@@ -188,7 +253,9 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
         }
 
 
+        //-----------------------------------------
         // Save Project
+        //-----------------------------------------
 
         SDL_Texture* saveText =
             TextRenderer::CreateText(
@@ -202,7 +269,7 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
             SDL_FRect pos =
             {
                 15,
-                130,
+                128,
                 140,
                 25
             };
@@ -216,37 +283,132 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
 
             SDL_DestroyTexture(saveText);
         }
+
+
+        //-----------------------------------------
+        // Save As
+        //-----------------------------------------
+
+        SDL_Texture* saveAsText =
+            TextRenderer::CreateText(
+                renderer,
+                "Save As",
+                black
+            );
+
+        if(saveAsText)
+        {
+            SDL_FRect pos =
+            {
+                15,
+                168,
+                140,
+                25
+            };
+
+            SDL_RenderTexture(
+                renderer,
+                saveAsText,
+                NULL,
+                &pos
+            );
+
+            SDL_DestroyTexture(saveAsText);
+        }
     }
 }
 
 
-// =====================================
-// Mouse
-// =====================================
+//-----------------------------------------
+// Handle Click
+//-----------------------------------------
 
-void EditorMenu::HandleClick(int x, int y)
+EditorMenuAction EditorMenu::HandleClick(int x, int y)
 {
+    //-----------------------------------------
     // کلیک روی File
+    //-----------------------------------------
 
-    if(x >= 0 && x <= 80 &&
-       y >= 0 && y <= 40)
+    if(x >= 0 &&
+       x <= 80 &&
+       y >= 0 &&
+       y <= 40)
     {
         fileOpen = !fileOpen;
 
-        return;
+        return EDITOR_NO_ACTION;
     }
 
 
-    // اگر منوی File باز است
+    //-----------------------------------------
+    // اگر File باز نیست
+    //-----------------------------------------
 
-    if(fileOpen)
+    if(!fileOpen)
     {
-        if(x >= 0 && x <= 180 &&
-           y >= 40 && y <= 160)
-        {
-            // فعلاً فقط منو را نگه می‌داریم
-
-            return;
-        }
+        return EDITOR_NO_ACTION;
     }
+
+
+    //-----------------------------------------
+    // New Project
+    //-----------------------------------------
+
+    if(x >= 0 &&
+       x <= 180 &&
+       y >= 40 &&
+       y < 80)
+    {
+        fileOpen = false;
+
+        return EDITOR_NEW_PROJECT;
+    }
+
+
+    //-----------------------------------------
+    // Open Project
+    //-----------------------------------------
+
+    if(x >= 0 &&
+       x <= 180 &&
+       y >= 80 &&
+       y < 120)
+    {
+        fileOpen = false;
+
+        return EDITOR_OPEN_PROJECT;
+    }
+
+
+    //-----------------------------------------
+    // Save Project
+    //-----------------------------------------
+
+    if(x >= 0 &&
+       x <= 180 &&
+       y >= 120 &&
+       y < 160)
+    {
+        fileOpen = false;
+
+        return EDITOR_SAVE_PROJECT;
+    }
+
+
+    //-----------------------------------------
+    // Save As
+    //-----------------------------------------
+
+    if(x >= 0 &&
+       x <= 180 &&
+       y >= 160 &&
+       y < 200)
+    {
+        fileOpen = false;
+
+        return EDITOR_SAVE_AS;
+    }
+
+
+    return EDITOR_NO_ACTION;
 }

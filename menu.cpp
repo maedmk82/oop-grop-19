@@ -100,7 +100,7 @@ void HandleMenuClick(int mx, int my)
         std::cout << "Clicked" << std::endl;
         CurrentPage = OPEN_PROJECT_PAGE;
 
-        LoadOpenProjects();
+
 
         fileMenuOpen=false;
 

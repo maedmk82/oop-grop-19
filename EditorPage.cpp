@@ -1,14 +1,21 @@
 #include "EditorPage.h"
 
+
 EditorPage::EditorPage(SDL_Window* window)
     : search(window)
 {
 }
+
+
+//-----------------------------------------
+// Draw
+//-----------------------------------------
+
 void EditorPage::Draw(SDL_Renderer* renderer)
 {
-    // =====================================
-    // پس زمینه
-    // =====================================
+    //-----------------------------------------
+    // Background
+    //-----------------------------------------
 
     SDL_SetRenderDrawColor(
         renderer,
@@ -32,28 +39,42 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     );
 
 
-    // =====================================
+    //-----------------------------------------
     // Editor Menu
-    // =====================================
+    //-----------------------------------------
 
     menu.Draw(renderer);
 
 
-    // =====================================
-    // Search Box
-    // =====================================
+    //-----------------------------------------
+    // Search
+    //-----------------------------------------
 
     search.Draw(renderer);
 }
 
 
-void EditorPage::HandleClick(int x, int y)
-{
-    menu.HandleClick(x, y);
+//-----------------------------------------
+// Mouse
+//-----------------------------------------
 
-    search.HandleClick(x, y);
+EditorMenuAction EditorPage::HandleClick(int x, int y)
+{
+    EditorMenuAction action =
+        menu.HandleClick(x,y);
+
+
+    // Search
+    search.HandleClick(x,y);
+
+
+    return action;
 }
 
+
+//-----------------------------------------
+// Keyboard
+//-----------------------------------------
 
 void EditorPage::HandleKeyboard(SDL_Event event)
 {

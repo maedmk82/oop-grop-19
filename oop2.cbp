@@ -45,6 +45,8 @@
 		<Unit filename="EditorPage.cpp" />
 		<Unit filename="EditorPage.h" />
 		<Unit filename="Page.h" />
+		<Unit filename="SaveAs.cpp" />
+		<Unit filename="SaveAs.h" />
 		<Unit filename="SearchBox.cpp" />
 		<Unit filename="SearchBox.h" />
 		<Unit filename="button.cpp" />

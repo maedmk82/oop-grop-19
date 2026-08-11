@@ -215,11 +215,61 @@ void EditorPage::Draw(SDL_Renderer* renderer)
 
     menu.Draw(renderer);
     search.Draw(renderer);
+    // =======================================================
+    // رسم سایدبار دوم (سمت راست) مخصوص دکمه‌های شبیه‌سازی
+    // =======================================================
+    SDL_Color black = {0, 0, 0, 255};
+    // پس‌زمینه سایدبار راست
+    SDL_FRect rightSidebarArea = { gridMaxX - 100, 50, 100, gridMaxY - 50 };
+    SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
+    SDL_RenderFillRect(renderer, &rightSidebarArea);
 
+    // ۱. دکمه Run (سبز)
+    SDL_SetRenderDrawColor(renderer, 150, 255, 150, 255); // رنگ سبز روشن
+    SDL_FRect runBtn = { gridMaxX - 90, 70, 80, 30 };
+    SDL_RenderFillRect(renderer, &runBtn);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // حاشیه مشکی
+    SDL_RenderRect(renderer, &runBtn);
+
+    SDL_Texture* tRun = TextRenderer::CreateText(renderer, "Run", black);
+    if(tRun) {
+        SDL_FRect p = {gridMaxX - 65, 75, 30, 20};
+        SDL_RenderTexture(renderer, tRun, NULL, &p);
+        SDL_DestroyTexture(tRun);
+    }
+
+    // ۲. دکمه Pause (زرد)
+    SDL_SetRenderDrawColor(renderer, 255, 230, 120, 255); // رنگ زرد روشن
+    SDL_FRect pauseBtn = { gridMaxX - 90, 120, 80, 30 };
+    SDL_RenderFillRect(renderer, &pauseBtn);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &pauseBtn);
+
+    SDL_Texture* tPause = TextRenderer::CreateText(renderer, "Pause", black);
+    if(tPause) {
+        SDL_FRect p = {gridMaxX - 75, 125, 50, 20};
+        SDL_RenderTexture(renderer, tPause, NULL, &p);
+        SDL_DestroyTexture(tPause);
+    }
+
+    // ۳. دکمه Stop (قرمز)
+    SDL_SetRenderDrawColor(renderer, 255, 150, 150, 255); // رنگ قرمز روشن
+    SDL_FRect stopBtn = { gridMaxX - 90, 170, 80, 30 };
+    SDL_RenderFillRect(renderer, &stopBtn);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &stopBtn);
+
+    SDL_Texture* tStop = TextRenderer::CreateText(renderer, "Stop", black);
+    if(tStop) {
+        SDL_FRect p = {gridMaxX - 70, 175, 40, 20};
+        SDL_RenderTexture(renderer, tStop, NULL, &p);
+        SDL_DestroyTexture(tStop);
+    }
+    // =======================================================
     // =======================================================
     // رسم دکمه‌های نوار ابزار در بالای صفحه (از چپ به راست)
     // =======================================================
-    SDL_Color black = {0, 0, 0, 255};
+
 
     // ۱. دکمه Rotate (چرخش) - شروع از مختصات امن 450
     SDL_SetRenderDrawColor(renderer, 200, 220, 255, 255);

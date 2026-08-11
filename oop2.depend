@@ -310,7 +310,7 @@
 	<windows.h>
 	<commdlg.h>
 
-1786169198 source:d:\term\term8\oop\final\oop4\editorpage.cpp
+1786170270 source:d:\term\term8\oop\final\oop4\editorpage.cpp
 	"EditorPage.h"
 	"TextRenderer.h"
 	<fstream>
@@ -346,7 +346,7 @@
 	<SDL3/SDL.h>
 	<SDL3_ttf/SDL_ttf.h>
 
-1786169788 source:d:\term\term8\oop\final\github\editorpage.cpp
+1786170270 source:d:\term\term8\oop\final\github\editorpage.cpp
 	"EditorPage.h"
 	"TextRenderer.h"
 	<fstream>

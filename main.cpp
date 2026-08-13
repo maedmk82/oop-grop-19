@@ -239,7 +239,26 @@ int main(int argc, char* argv[])
                 }
                 else if(CurrentPage == EDITOR_PAGE)
                 {
-                    editor->HandleKeyboard(event);
+                    // میانبرهای کیبورد: Delete / Ctrl+Z / Ctrl+Y / Ctrl+S / Esc / زوم
+                    EditorMenuAction kbAction = editor->HandleKeyboard(event);
+
+                    if (kbAction == EDITOR_SAVE_PROJECT)
+                    {
+                        SaveProject(currentProject);
+                        if (!currentProject.path.empty())
+                        {
+                            editor->SaveWorkspace(currentProject.path);
+                            std::cout << "Project Overwritten & Saved (Ctrl+S): " << currentProject.path << std::endl;
+                        }
+                        else
+                        {
+                            CurrentPage = SAVE_AS_PAGE;
+                        }
+                    }
+                    else if (kbAction == EDITOR_SAVE_AS)
+                    {
+                        CurrentPage = SAVE_AS_PAGE;
+                    }
                 }
                 else if(CurrentPage == SAVE_AS_PAGE)
                 {

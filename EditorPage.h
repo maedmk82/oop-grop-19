@@ -11,6 +11,7 @@
 #include "EditorMenu.h"
 #include "SearchBox.h"
 #include "Component.h"
+#include "WireSystem.h"
 
 // ساختار برای نگهداری اطلاعات هر ابزار/قطعه در نوار کناری
 struct ToolItem {
@@ -30,6 +31,10 @@ private:
     std::vector<ToolItem> filteredTools;  // قطعاتی که پس از جستجو نمایش داده می‌شوند
     ComponentType selectedTool = ComponentType::RESISTOR;
     bool isPlacingMode = false;
+    bool isWireMode = false;
+    int nextComponentId = 1;
+
+    WireSystem wireSystem;
 
     // مختصات خام موس روی صفحه (Screen Space) - برای تعامل با UI ثابت (سایدبار، دکمه‌ها)
     int currentMouseX = 0;
@@ -48,6 +53,12 @@ private:
     void DrawStatusBar(SDL_Renderer* renderer, int windowW, int windowH);
     void DrawOriginMarker(SDL_Renderer* renderer);
     void UpdateSearchFilter(); // تابع جدید برای فیلتر کردن قطعات
+    std::unique_ptr<Component> CreateComponent(ComponentType type, float x, float y);
+    Component* FindComponentById(int id) const;
+    void AssignComponentId(Component* component, int forcedId = -1);
+    void DeleteSelectedItems();
+    bool HandleWireClick(float wx, float wy);
+    void UpdateWirePreview();
 
     // ================================================================
     // ---------- سیستم سیم‌کشی: تشخیص خودکار پایه‌ها (بخش ۵.۱) ----------
@@ -164,7 +175,7 @@ public:
     // لغو حالت جای‌گذاری قطعه (مثلاً با کلیک راست موس) — کاربر می‌تواند
     // بعد از قرار دادن هر تعداد نمونه که خواست، با این تابع از حالت
     // جای‌گذاری خارج شود.
-    void CancelPlacing() { isPlacingMode = false; }
+    void CancelPlacing() { isPlacingMode = false; wireSystem.Cancel(); }
 
     // ================================================================
     // -------------------- توابع جدید Zoom / Pan ---------------------
@@ -184,5 +195,7 @@ public:
 
     // تبدیل مختصات صفحه (پیکسل پنجره) به مختصات جهانی بوم
     void ScreenToWorld(int sx, int sy, float& wx, float& wy) const;
+    bool IsWireMode() const { return isWireMode; }
+    void SetWireMode(bool enabled);
 };
 #endif

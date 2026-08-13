@@ -62,7 +62,6 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    // حالا که Window ساخته شده
     editor = new EditorPage(window);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
 
@@ -91,8 +90,6 @@ int main(int argc, char* argv[])
             // --------------------------------
             if(event.type == SDL_EVENT_QUIT)
             {
-                // سیو خودکار هنگام بسته شدن برنامه
-                // سیو خودکار هنگام بسته شدن برنامه
                 if (CurrentPage == EDITOR_PAGE && !currentProject.path.empty() && editor != nullptr)
                 {
                     editor->SaveWorkspace(currentProject.path);
@@ -110,7 +107,15 @@ int main(int argc, char* argv[])
                 int x = event.button.x;
                 int y = event.button.y;
 
-                if(CurrentPage == HOME_PAGE)
+                // --- جدید: دکمه‌ی وسط موس برای شروع جابه‌جایی (Pan) بوم ---
+                if (event.button.button == SDL_BUTTON_MIDDLE)
+                {
+                    if (CurrentPage == EDITOR_PAGE && editor != nullptr)
+                    {
+                        editor->StartPan(x, y);
+                    }
+                }
+                else if(CurrentPage == HOME_PAGE)
                 {
                     HandleMenuClick(x, y);
 
@@ -120,14 +125,10 @@ int main(int argc, char* argv[])
                         int yPos = 120 + i * 45;
                         if(x >= 100 && x <= 500 && y >= yPos && y <= yPos + 35)
                         {
-                            // ---------------------------------------------------------
-                            // ذخیره پروژه قبلی اگر از ادیتور به صفحه اصلی آمده‌ایم
-                            // ---------------------------------------------------------
                             if (editor != nullptr && !currentProject.path.empty()) {
                                 editor->SaveWorkspace(currentProject.path);
                                 SaveProject(currentProject);
                             }
-                            // ---------------------------------------------------------
 
                             selectedProjectIndex = i;
                             currentProject = list[i];
@@ -139,7 +140,6 @@ int main(int argc, char* argv[])
                                     editor->LoadWorkspace(currentProject.path);
                                 }
 
-                                // *** تغییر سایز پنجره ***
                                 if (currentProject.pageSize.find("A3") != std::string::npos) {
                                     SDL_SetWindowSize(window, 1350, 800);
                                     SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
@@ -178,7 +178,6 @@ int main(int argc, char* argv[])
                     else if(action == EDITOR_SAVE_PROJECT)
                     {
                         SaveProject(currentProject);
-                        // چک کردن اینکه آیا مسیر خالی نیست
                         if (!currentProject.path.empty())
                         {
                             editor->SaveWorkspace(currentProject.path);
@@ -200,18 +199,18 @@ int main(int argc, char* argv[])
                 }
             } // <--- پایان رویداد کلیک موس (DOWN)
 
-            // =========================================================
-            // اضافه شدن رویدادهای کشیدن و رها کردن موس (Drag & Drop)
-            // =========================================================
-
-            // ۱. رویداد حرکت موس (وقتی موس روی صفحه کشیده می‌شود)
+            // --------------------------------
+            // 3. حرکت موس (درگ قطعات، جابه‌جایی بوم، سایه‌ی قطعه)
+            // --------------------------------
             else if (event.type == SDL_EVENT_MOUSE_MOTION) {
                 if (CurrentPage == EDITOR_PAGE && editor != nullptr) {
                     editor->HandleMouseMove(event.motion.x, event.motion.y);
                 }
             }
 
-            // ۲. رویداد رها کردن کلیک موس (پایان جابه‌جایی قطعه یا کادر انتخاب)
+            // --------------------------------
+            // 4. رها کردن کلیک موس (پایان درگ، پایان انتخاب گروهی، پایان Pan)
+            // --------------------------------
             else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
                 if (CurrentPage == EDITOR_PAGE && editor != nullptr) {
                     editor->HandleMouseRelease(event.button.x, event.button.y);
@@ -219,28 +218,18 @@ int main(int argc, char* argv[])
             }
 
             // --------------------------------
-            // 3. حرکت موس (برای سایه زدن قطعات)
+            // 5. اسکرول موس (Zoom In / Zoom Out نسبت به نشانگر موس) - جدید
             // --------------------------------
-            else if (event.type == SDL_EVENT_MOUSE_MOTION)
-            {
-                if (CurrentPage == EDITOR_PAGE && editor != nullptr)
-                {
-                    editor->HandleMouseMove(event.motion.x, event.motion.y);
+            else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+                if (CurrentPage == EDITOR_PAGE && editor != nullptr) {
+                    float mx = 0, my = 0;
+                    SDL_GetMouseState(&mx, &my);
+                    editor->HandleMouseWheel(event.wheel.y, (int)mx, (int)my);
                 }
             }
-            // کدهایی که قبلا برای کلیک (DOWN) داشتید...
-                else if (event.type == SDL_EVENT_MOUSE_MOTION) {
-                    if (CurrentPage == EDITOR_PAGE && editor != nullptr) {
-                        editor->HandleMouseMove(event.motion.x, event.motion.y);
-                    }
-                }
-                else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-                    if (CurrentPage == EDITOR_PAGE && editor != nullptr) {
-                        editor->HandleMouseRelease(event.button.x, event.button.y);
-                    }
-                }
+
             // --------------------------------
-            // 4. کیبورد (تایپ و دکمه‌ها)
+            // 6. کیبورد (تایپ، دکمه‌ها، میان‌برهای زوم)
             // --------------------------------
             else if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_TEXT_INPUT)
             {
@@ -298,7 +287,7 @@ int main(int argc, char* argv[])
     TTF_CloseFont(font);
     TextRenderer::Close();
 
-    if (editor) delete editor; // جلوگیری از Memory Leak
+    if (editor) delete editor;
 
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
@@ -330,7 +319,6 @@ void DrawHomePage(SDL_Renderer* renderer)
     {
         SDL_SetRenderDrawColor(renderer, 210, 210, 210, 255);
 
-        // در اینجا عبارت float اضافه شد تا هشدار برطرف شود
         SDL_FRect box = { 100, (float)(120 + i * 45), 400, 35 };
         SDL_RenderFillRect(renderer, &box);
 
@@ -338,7 +326,6 @@ void DrawHomePage(SDL_Renderer* renderer)
 
         if(txt)
         {
-            // در اینجا هم عبارت float اضافه شد
             SDL_FRect tpos = { 120, (float)(130 + i * 45), 250, 20 };
             SDL_RenderTexture(renderer, txt, NULL, &tpos);
             SDL_DestroyTexture(txt);
@@ -346,7 +333,6 @@ void DrawHomePage(SDL_Renderer* renderer)
     }
 }
 //--------------------------------------------------
-
 
 void DrawOpenProjectPage(SDL_Renderer* renderer)
 {

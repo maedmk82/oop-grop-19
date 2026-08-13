@@ -1243,11 +1243,10 @@ void EditorPage::DeleteSelectedItems()
     );
 
     for (int id : deletedComponentIds) {
-        wireSystem.DeleteWiresConnectedToComponent(id);
+        wireSystem.DeleteWiresConnectedToComponent(id, components);
     }
 
-    wireSystem.DeleteSelected();
-    wireSystem.RebuildJunctions(components);
+    wireSystem.DeleteSelected(components);
 }
 
 void EditorPage::ClearWorkspace()
@@ -1498,11 +1497,6 @@ void EditorPage::HandleMouseMove(int x, int y) {
             origin.comp->x = std::round(targetX / (float)gridSpacing) * gridSpacing;
             origin.comp->y = std::round(targetY / (float)gridSpacing) * gridSpacing;
         }
-
-        // The components now have their new positions, so their pin world
-        // coordinates are also current. Rebuild every connected wire route
-        // without deleting the wire or changing its logical endpoints.
-        wireSystem.UpdateConnectedWireRoutes(components, gridSpacing);
 
         lastMouseX = wx;
         lastMouseY = wy;

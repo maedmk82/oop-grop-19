@@ -34,6 +34,120 @@ EditorPage::EditorPage(SDL_Window* window)
     filteredTools = allTools;
 }
 
+
+std::unique_ptr<Component> EditorPage::CreateComponent(ComponentType type, float x, float y)
+{
+    switch (type) {
+        case ComponentType::GND: return std::make_unique<GNDComponent>(x, y);
+        case ComponentType::DC_SOURCE: return std::make_unique<DCSourceComponent>(x, y);
+        case ComponentType::BATTERY: return std::make_unique<BatteryComponent>(x, y);
+        case ComponentType::CLOCK: return std::make_unique<ClockComponent>(x, y);
+        case ComponentType::LOGIC_STATE: return std::make_unique<LogicStateComponent>(x, y);
+        case ComponentType::RESISTOR: return std::make_unique<ResistorComponent>(x, y);
+        case ComponentType::CAPACITOR: return std::make_unique<CapacitorComponent>(x, y);
+        case ComponentType::SWITCH: return std::make_unique<SwitchComponent>(x, y);
+        case ComponentType::PUSH_BUTTON: return std::make_unique<PushButtonComponent>(x, y);
+        case ComponentType::LED: return std::make_unique<LEDComponent>(x, y);
+        case ComponentType::SEVEN_SEGMENT: return std::make_unique<SevenSegmentComponent>(x, y);
+        case ComponentType::GATE_AND: return std::make_unique<GateANDComponent>(x, y);
+        case ComponentType::GATE_OR: return std::make_unique<GateORComponent>(x, y);
+        case ComponentType::GATE_NOT: return std::make_unique<GateNOTComponent>(x, y);
+        case ComponentType::GATE_NAND: return std::make_unique<GateNANDComponent>(x, y);
+        case ComponentType::GATE_NOR: return std::make_unique<GateNORComponent>(x, y);
+        case ComponentType::GATE_XOR: return std::make_unique<GateXORComponent>(x, y);
+        case ComponentType::FLIP_FLOP_D: return std::make_unique<FlipFlopDComponent>(x, y);
+        default: return nullptr;
+    }
+}
+
+Component* EditorPage::FindComponentById(int id) const
+{
+    for (const auto& component : components) {
+        if (component && component->id == id) return component.get();
+    }
+    return nullptr;
+}
+
+void EditorPage::AssignComponentId(Component* component, int forcedId)
+{
+    if (!component) return;
+
+    if (forcedId >= 0) {
+        component->id = forcedId;
+        if (forcedId >= nextComponentId) nextComponentId = forcedId + 1;
+        return;
+    }
+
+    component->id = nextComponentId++;
+}
+
+void EditorPage::SetWireMode(bool enabled)
+{
+    isWireMode = enabled;
+    if (enabled) {
+        isPlacingMode = false;
+        for (auto& c : components) c->isSelected = false;
+        wireSystem.ClearSelection();
+    } else {
+        wireSystem.Cancel();
+    }
+}
+
+bool EditorPage::HandleWireClick(float wx, float wy)
+{
+    Component* pinComponent = nullptr;
+    int pinIndex = -1;
+
+    if (!wireSystem.isDrawing) {
+        if (wireSystem.FindPinAt(wx, wy, components, pinComponent, pinIndex)) {
+            wireSystem.StartFromPin(pinComponent, pinIndex, components);
+            return true;
+        }
+
+        int wireIndex = -1;
+        WirePoint hitPoint;
+        if (wireSystem.FindWireHit(wx, wy, wireIndex, hitPoint)) {
+            SaveCurrentStateForUndo();
+            wireSystem.StartFromPoint(hitPoint.x, hitPoint.y, gridSpacing, wireIndex);
+            return true;
+        }
+
+        return true;
+    }
+
+    if (wireSystem.FindPinAt(wx, wy, components, pinComponent, pinIndex)) {
+        if (wireSystem.activeWire.start.componentId == pinComponent->id &&
+            wireSystem.activeWire.start.pinIndex == pinIndex) {
+            return true;
+        }
+
+        SaveCurrentStateForUndo();
+        wireSystem.FinishAtPin(pinComponent, pinIndex, components, gridSpacing);
+        return true;
+    }
+
+    int wireIndex = -1;
+    WirePoint hitPoint;
+    if (wireSystem.FindWireHit(wx, wy, wireIndex, hitPoint)) {
+        SaveCurrentStateForUndo();
+        wireSystem.FinishAtPoint(hitPoint.x, hitPoint.y, gridSpacing, components, true);
+        return true;
+    }
+
+    // Empty click adds an orthogonal corner and keeps wire drawing active.
+    WirePoint snapped = WireSystem::SnapPoint(wx, wy, gridSpacing);
+    WireSystem::AddOrthogonalPoint(wireSystem.activeWire.points, snapped, gridSpacing);
+    wireSystem.previewPoint = snapped;
+    return true;
+}
+
+void EditorPage::UpdateWirePreview()
+{
+    if (isWireMode && wireSystem.isDrawing) {
+        wireSystem.UpdatePreview(worldMouseX, worldMouseY, gridSpacing);
+    }
+}
+
 //-----------------------------------------
 // سیستم جستجو
 //-----------------------------------------
@@ -612,6 +726,11 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     DrawOriginMarker(renderer);
 
     // =========================================================
+    // رسم سیم‌ها قبل از قطعات تا سیم‌ها زیر بدنه‌ی قطعات قرار بگیرند.
+    // =========================================================
+    wireSystem.Draw(renderer, components);
+
+    // =========================================================
     // رسم قطعات (بدون تغییر نسبت به قبل، چون در فضای جهانی هستند)
     // =========================================================
     for (auto& comp : components) {
@@ -721,6 +840,14 @@ void EditorPage::Draw(SDL_Renderer* renderer)
         SDL_DestroyTexture(tStop);
     }
 
+    SDL_SetRenderDrawColor(renderer, isWireMode ? 120 : 200, isWireMode ? 230 : 220, isWireMode ? 160 : 255, 255);
+    SDL_FRect wireBtn = { 380, 10, 60, 30 };
+    SDL_RenderFillRect(renderer, &wireBtn);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &wireBtn);
+    SDL_Texture* tWire = TextRenderer::CreateText(renderer, "Wire", black);
+    if (tWire) { SDL_FRect p = {385, 15, 45, 20}; SDL_RenderTexture(renderer, tWire, NULL, &p); SDL_DestroyTexture(tWire); }
+
     SDL_SetRenderDrawColor(renderer, 200, 220, 255, 255);
     SDL_FRect rotBtn = { 450, 10, 60, 30 };
     SDL_RenderFillRect(renderer, &rotBtn);
@@ -804,6 +931,11 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
     search.HandleClick(x, y);
 
     // ---------------- نوار ابزار بالا (فضای صفحه، بدون تغییر) ----------------
+    // Wire mode: 380..440
+    if (x >= 380 && x <= 440 && y >= 10 && y <= 40) {
+        SetWireMode(!isWireMode);
+        return (EditorMenuAction)0;
+    }
     if (x >= 450 && x <= 510 && y >= 10 && y <= 40) {
         SaveCurrentStateForUndo();
         for (auto& c : components) if (c->isSelected) c->angle = (c->angle + 90) % 360;
@@ -815,9 +947,13 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
         return (EditorMenuAction)0;
     }
     if (x >= 590 && x <= 650 && y >= 10 && y <= 40) {
-        SaveCurrentStateForUndo();
-        components.erase(std::remove_if(components.begin(), components.end(),
-            [](const std::unique_ptr<Component>& c) { return c->isSelected; }), components.end());
+        bool hasSelection = false;
+        for (const auto& c : components) if (c->isSelected) { hasSelection = true; break; }
+        for (const auto& w : wireSystem.wires) if (w.isSelected) { hasSelection = true; break; }
+        if (hasSelection) {
+            SaveCurrentStateForUndo();
+            DeleteSelectedItems();
+        }
         return (EditorMenuAction)0;
     }
     if (x >= 660 && x <= 730 && y >= 10 && y <= 40) {
@@ -840,6 +976,7 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
             int buttonY = 70 + index * 40;
             if (y >= buttonY && y <= buttonY + 30) {
                 selectedTool = filteredTools[index].type;
+                SetWireMode(false);
                 isPlacingMode = true;
             }
         }
@@ -851,6 +988,11 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
     float wx, wy;
     ScreenToWorld(x, y, wx, wy);
 
+    // ---------------- سیستم سیم‌کشی ----------------
+    if (isWireMode && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
+        return HandleWireClick(wx, wy) ? (EditorMenuAction)0 : action;
+    }
+
     // ---------------- جای‌گذاری قطعه با Snap to Grid ----------------
     if (isPlacingMode && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
 
@@ -859,28 +1001,10 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
 
         SaveCurrentStateForUndo();
 
-        bool placed = false;
-
-        if (selectedTool == ComponentType::GND) { components.push_back(std::make_unique<GNDComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::DC_SOURCE) { components.push_back(std::make_unique<DCSourceComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::BATTERY) { components.push_back(std::make_unique<BatteryComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::CLOCK) { components.push_back(std::make_unique<ClockComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::LOGIC_STATE) { components.push_back(std::make_unique<LogicStateComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::RESISTOR) { components.push_back(std::make_unique<ResistorComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::CAPACITOR) { components.push_back(std::make_unique<CapacitorComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::SWITCH) { components.push_back(std::make_unique<SwitchComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::PUSH_BUTTON) { components.push_back(std::make_unique<PushButtonComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::LED) { components.push_back(std::make_unique<LEDComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::SEVEN_SEGMENT) { components.push_back(std::make_unique<SevenSegmentComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::GATE_AND) { components.push_back(std::make_unique<GateANDComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::GATE_OR) { components.push_back(std::make_unique<GateORComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::GATE_NOT) { components.push_back(std::make_unique<GateNOTComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::GATE_XOR) { components.push_back(std::make_unique<GateXORComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::GATE_NAND) { components.push_back(std::make_unique<GateNANDComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::GATE_NOR) { components.push_back(std::make_unique<GateNORComponent>(snapX, snapY)); placed = true; }
-        else if (selectedTool == ComponentType::FLIP_FLOP_D) { components.push_back(std::make_unique<FlipFlopDComponent>(snapX, snapY)); placed = true; }
-
-        if (placed) {
+        std::unique_ptr<Component> newComponent = CreateComponent(selectedTool, snapX, snapY);
+        if (newComponent) {
+            AssignComponentId(newComponent.get());
+            components.push_back(std::move(newComponent));
             std::cout << "SUCCESS: Component placed at X:" << snapX << " Y:" << snapY << std::endl;
         } else {
             std::cout << "ERROR: selectedTool did not match any component!" << std::endl;
@@ -918,6 +1042,22 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
         }
     }
 
+    // ---------------- انتخاب سیم ----------------
+    if (!isPlacingMode && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
+        int wireIndex = -1;
+        WirePoint hitPoint;
+        if (wireSystem.FindWireHit(wx, wy, wireIndex, hitPoint)) {
+            for (auto& c : components) c->isSelected = false;
+            wireSystem.ClearSelection();
+            if (wireIndex >= 0 && wireIndex < (int)wireSystem.wires.size()) {
+                wireSystem.wires[wireIndex].isSelected = true;
+            }
+            isDragging = false;
+            isSelectingBox = false;
+            return (EditorMenuAction)0;
+        }
+    }
+
     // ---------------- انتخاب قطعه / شروع درگ / شروع مستطیل انتخاب گروهی ----------------
     if (!isPlacingMode && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
         bool clickedOnComponent = false;
@@ -927,6 +1067,7 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
                 clickedOnComponent = true;
                 if (!(*it)->isSelected) {
                     for (auto& c : components) c->isSelected = false;
+                    wireSystem.ClearSelection();
                     (*it)->isSelected = true;
                 }
                 isDragging = true;
@@ -1045,10 +1186,14 @@ EditorMenuAction EditorPage::HandleKeyboard(SDL_Event event)
             for (auto& c : components) {
                 if (c->isSelected) { anySelected = true; break; }
             }
+            if (!anySelected) {
+                for (const auto& w : wireSystem.wires) {
+                    if (w.isSelected) { anySelected = true; break; }
+                }
+            }
             if (anySelected) {
                 SaveCurrentStateForUndo();
-                components.erase(std::remove_if(components.begin(), components.end(),
-                    [](const std::unique_ptr<Component>& c) { return c->isSelected; }), components.end());
+                DeleteSelectedItems();
             }
             return (EditorMenuAction)0;
         }
@@ -1056,6 +1201,13 @@ EditorMenuAction EditorPage::HandleKeyboard(SDL_Event event)
         // ---------------- Esc : لغو حالت جای‌گذاری قطعه ----------------
         if (event.key.key == SDLK_ESCAPE) {
             isPlacingMode = false;
+            if (isWireMode) wireSystem.Cancel();
+            return (EditorMenuAction)0;
+        }
+
+        // ---------------- کلید W: ابزار سیم‌کشی ----------------
+        if (!ctrlHeld && event.key.key == SDLK_W) {
+            SetWireMode(!isWireMode);
             return (EditorMenuAction)0;
         }
 
@@ -1077,10 +1229,37 @@ EditorMenuAction EditorPage::HandleKeyboard(SDL_Event event)
     return (EditorMenuAction)0;
 }
 
+void EditorPage::DeleteSelectedItems()
+{
+    std::vector<int> deletedComponentIds;
+    for (const auto& c : components) {
+        if (c && c->isSelected) deletedComponentIds.push_back(c->id);
+    }
+
+    components.erase(
+        std::remove_if(components.begin(), components.end(),
+            [](const std::unique_ptr<Component>& c) { return c && c->isSelected; }),
+        components.end()
+    );
+
+    for (int id : deletedComponentIds) {
+        wireSystem.DeleteWiresConnectedToComponent(id);
+    }
+
+    wireSystem.DeleteSelected();
+    wireSystem.RebuildJunctions(components);
+}
+
 void EditorPage::ClearWorkspace()
 {
     components.clear();
+    wireSystem.Clear();
     isPlacingMode = false;
+    isWireMode = false;
+    nextComponentId = 1;
+    dragOrigins.clear();
+    isDragging = false;
+    isSelectingBox = false;
 }
 
 //-----------------------------------------
@@ -1094,59 +1273,24 @@ void EditorPage::SaveWorkspace(const std::string& filepath)
         return;
     }
 
-    for (const auto& comp : components) {
-        file << (int)comp->type << " " << comp->x << " " << comp->y << " "
-             << comp->angle << " " << comp->isMirrored << "\n";
-    }
-
+    file << SaveStateToString();
     file.close();
     std::cout << "Workspace saved successfully to: " << filepath << std::endl;
 }
 
 void EditorPage::LoadWorkspace(const std::string& filepath)
 {
-    ClearWorkspace();
-
     std::ifstream file(filepath);
     if (!file.is_open()) {
         std::cout << "Error: Could not open file " << filepath << std::endl;
         return;
     }
 
-    int typeInt, angle;
-    float x, y;
-    bool isMirrored;
-
-    while (file >> typeInt >> x >> y >> angle >> isMirrored)
-    {
-        ComponentType type = (ComponentType)typeInt;
-
-        if (type == ComponentType::GND) components.push_back(std::make_unique<GNDComponent>(x, y));
-        else if (type == ComponentType::DC_SOURCE) components.push_back(std::make_unique<DCSourceComponent>(x, y));
-        else if (type == ComponentType::BATTERY) components.push_back(std::make_unique<BatteryComponent>(x, y));
-        else if (type == ComponentType::LOGIC_STATE) components.push_back(std::make_unique<LogicStateComponent>(x, y));
-        else if (type == ComponentType::CLOCK) components.push_back(std::make_unique<ClockComponent>(x, y));
-        else if (type == ComponentType::RESISTOR) components.push_back(std::make_unique<ResistorComponent>(x, y));
-        else if (type == ComponentType::CAPACITOR) components.push_back(std::make_unique<CapacitorComponent>(x, y));
-        else if (type == ComponentType::PUSH_BUTTON) components.push_back(std::make_unique<PushButtonComponent>(x, y));
-        else if (type == ComponentType::SWITCH) components.push_back(std::make_unique<SwitchComponent>(x, y));
-        else if (type == ComponentType::LED) components.push_back(std::make_unique<LEDComponent>(x, y));
-        else if (type == ComponentType::SEVEN_SEGMENT) components.push_back(std::make_unique<SevenSegmentComponent>(x, y));
-        else if (type == ComponentType::GATE_AND) components.push_back(std::make_unique<GateANDComponent>(x, y));
-        else if (type == ComponentType::GATE_OR) components.push_back(std::make_unique<GateORComponent>(x, y));
-        else if (type == ComponentType::GATE_NOT) components.push_back(std::make_unique<GateNOTComponent>(x, y));
-        else if (type == ComponentType::GATE_NAND) components.push_back(std::make_unique<GateNANDComponent>(x, y));
-        else if (type == ComponentType::GATE_NOR) components.push_back(std::make_unique<GateNORComponent>(x, y));
-        else if (type == ComponentType::GATE_XOR) components.push_back(std::make_unique<GateXORComponent>(x, y));
-        else if (type == ComponentType::FLIP_FLOP_D) components.push_back(std::make_unique<FlipFlopDComponent>(x, y));
-
-        if (!components.empty()) {
-            components.back()->angle = angle;
-            components.back()->isMirrored = isMirrored;
-        }
-    }
-
+    std::stringstream buffer;
+    buffer << file.rdbuf();
     file.close();
+
+    LoadStateFromString(buffer.str());
     std::cout << "Workspace loaded successfully from: " << filepath << std::endl;
 }
 
@@ -1156,49 +1300,100 @@ void EditorPage::LoadWorkspace(const std::string& filepath)
 std::string EditorPage::SaveStateToString()
 {
     std::stringstream ss;
+    ss << "EDITOR_STATE_V2\n";
+    ss << "PAGE " << pageSize << "\n";
+    ss << "NEXT_COMPONENT_ID " << nextComponentId << "\n";
+    ss << "COMPONENTS " << components.size() << "\n";
+
     for (const auto& comp : components) {
-        ss << (int)comp->type << " " << comp->x << " " << comp->y << " "
+        ss << "C " << comp->id << " " << (int)comp->type << " "
+           << comp->x << " " << comp->y << " "
            << comp->angle << " " << comp->isMirrored << "\n";
     }
+
+    ss << wireSystem.Serialize();
     return ss.str();
 }
 
 void EditorPage::LoadStateFromString(const std::string& state)
 {
-    ClearWorkspace();
     std::stringstream ss(state);
+    std::string firstToken;
+
+    if (!(ss >> firstToken)) return;
+
+    // New format.
+    if (firstToken == "EDITOR_STATE_V2") {
+        ClearWorkspace();
+
+        std::string token;
+        size_t componentCount = 0;
+
+        while (ss >> token) {
+            if (token == "PAGE") {
+                ss >> pageSize;
+            } else if (token == "NEXT_COMPONENT_ID") {
+                ss >> nextComponentId;
+            } else if (token == "COMPONENTS") {
+                ss >> componentCount;
+
+                for (size_t i = 0; i < componentCount; ++i) {
+                    int id = -1;
+                    int typeInt = -1;
+                    float x = 0.0f, y = 0.0f;
+                    int angle = 0;
+                    bool mirrored = false;
+
+                    ss >> token;
+                    if (token != "C") return;
+
+                    ss >> id >> typeInt >> x >> y >> angle >> mirrored;
+
+                    auto component = CreateComponent((ComponentType)typeInt, x, y);
+                    if (!component) continue;
+
+                    component->angle = angle;
+                    component->isMirrored = mirrored;
+                    AssignComponentId(component.get(), id);
+                    components.push_back(std::move(component));
+                }
+            } else if (token == "WIRE_SYSTEM_V1") {
+                // WireSystem::Deserialize expects the version token itself.
+                // We already consumed it, so parse the remainder manually by
+                // reconstructing a tiny stream with the token included.
+                std::stringstream wireStream;
+                wireStream << "WIRE_SYSTEM_V1\n";
+                wireStream << ss.rdbuf();
+                wireSystem.Deserialize(wireStream);
+                break;
+            }
+        }
+
+        if (nextComponentId <= 0) nextComponentId = 1;
+        for (const auto& c : components) {
+            if (c->id >= nextComponentId) nextComponentId = c->id + 1;
+        }
+        wireSystem.RebuildJunctions(components);
+        return;
+    }
+
+    // Backward compatibility with the old five-column format.
+    ClearWorkspace();
+    ss.clear();
+    ss.str(state);
 
     int typeInt, angle;
     float x, y;
     bool isMirrored;
 
-    while (ss >> typeInt >> x >> y >> angle >> isMirrored)
-    {
-        ComponentType type = (ComponentType)typeInt;
+    while (ss >> typeInt >> x >> y >> angle >> isMirrored) {
+        auto component = CreateComponent((ComponentType)typeInt, x, y);
+        if (!component) continue;
 
-        if (type == ComponentType::GND) components.push_back(std::make_unique<GNDComponent>(x, y));
-        else if (type == ComponentType::DC_SOURCE) components.push_back(std::make_unique<DCSourceComponent>(x, y));
-        else if (type == ComponentType::BATTERY) components.push_back(std::make_unique<BatteryComponent>(x, y));
-        else if (type == ComponentType::LOGIC_STATE) components.push_back(std::make_unique<LogicStateComponent>(x, y));
-        else if (type == ComponentType::CLOCK) components.push_back(std::make_unique<ClockComponent>(x, y));
-        else if (type == ComponentType::RESISTOR) components.push_back(std::make_unique<ResistorComponent>(x, y));
-        else if (type == ComponentType::CAPACITOR) components.push_back(std::make_unique<CapacitorComponent>(x, y));
-        else if (type == ComponentType::PUSH_BUTTON) components.push_back(std::make_unique<PushButtonComponent>(x, y));
-        else if (type == ComponentType::SWITCH) components.push_back(std::make_unique<SwitchComponent>(x, y));
-        else if (type == ComponentType::LED) components.push_back(std::make_unique<LEDComponent>(x, y));
-        else if (type == ComponentType::SEVEN_SEGMENT) components.push_back(std::make_unique<SevenSegmentComponent>(x, y));
-        else if (type == ComponentType::GATE_AND) components.push_back(std::make_unique<GateANDComponent>(x, y));
-        else if (type == ComponentType::GATE_OR) components.push_back(std::make_unique<GateORComponent>(x, y));
-        else if (type == ComponentType::GATE_NOT) components.push_back(std::make_unique<GateNOTComponent>(x, y));
-        else if (type == ComponentType::GATE_NAND) components.push_back(std::make_unique<GateNANDComponent>(x, y));
-        else if (type == ComponentType::GATE_NOR) components.push_back(std::make_unique<GateNORComponent>(x, y));
-        else if (type == ComponentType::GATE_XOR) components.push_back(std::make_unique<GateXORComponent>(x, y));
-        else if (type == ComponentType::FLIP_FLOP_D) components.push_back(std::make_unique<FlipFlopDComponent>(x, y));
-
-        if (!components.empty()) {
-            components.back()->angle = angle;
-            components.back()->isMirrored = isMirrored;
-        }
+        component->angle = angle;
+        component->isMirrored = isMirrored;
+        AssignComponentId(component.get());
+        components.push_back(std::move(component));
     }
 }
 
@@ -1265,6 +1460,11 @@ void EditorPage::ExportToImage(SDL_Renderer* renderer)
 //-----------------------------------------
 // Mouse Move / Release
 //-----------------------------------------
+void EditorPage::HandleMouseMotion(int x, int y)
+{
+    HandleMouseMove(x, y);
+}
+
 void EditorPage::HandleMouseMove(int x, int y) {
     currentMouseX = x;
     currentMouseY = y;
@@ -1277,6 +1477,7 @@ void EditorPage::HandleMouseMove(int x, int y) {
     // بخش ۵.۱ - تشخیص خودکار پایه‌ها: در هر حرکت موس (حلقه‌ی اصلی رویداد)
     // فاصله‌ی موس تا همه‌ی پین‌های همه‌ی قطعات سنجیده و هایلایت می‌شود.
     UpdatePinHighlights();
+    UpdateWirePreview();
 
     if (isPanning) {
         UpdatePan(x, y);

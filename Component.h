@@ -4,6 +4,8 @@
 #include <SDL3/SDL.h>
 #include <string>
 #include <vector>
+#include <cmath>
+#include <utility>
 
 // -----------------------------------------
 // 1. انواع قطعات
@@ -20,13 +22,39 @@ enum class ComponentType {
 };
 
 // -----------------------------------------
-// 2. ساختار پین‌ها
+// 2. ساختار پین‌ها (بخش ۵.۱ - تشخیص خودکار پایه‌ها)
 // -----------------------------------------
 struct Pin {
     std::string name;
-    float offsetX, offsetY; // موقعیت پین نسبت به مرکز قطعه
+    float offsetX, offsetY; // موقعیت محلیِ پین نسبت به قطعه (قبل از چرخش/قرینه/جابجایی)
     bool isOutput;
     float voltage = 0.0f;   // مقدار ولتاژ (0 ولت یا 5 ولت منطقی)
+
+    // ---- تشخیص خودکار نزدیک‌شدن موس به پین ----
+    bool isHighlighted = false;
+    float sensitivityRadius = 6.0f; // شعاع حساسیت (در مختصات جهانیِ بوم)
+
+    // worldX/worldY: موقعیت واقعیِ این پین روی بوم (بعد از اعمال چرخش/
+    // قرینه/جابجایی قطعه‌ی مادر) — چون Pin به‌تنهایی از موقعیت قطعه خبر
+    // ندارد، این مختصات باید توسط قطعه‌ی مالکش (با LocalToWorld) محاسبه
+    // و به این تابع پاس داده شود.
+    // mouseX/mouseY: مختصات جهانیِ فعلیِ نشانگر موس.
+    bool checkMouseOver(float worldX, float worldY, float mouseX, float mouseY) {
+        float dx = mouseX - worldX;
+        float dy = mouseY - worldY;
+        float dist = std::sqrt(dx * dx + dy * dy);
+
+        isHighlighted = (dist <= sensitivityRadius);
+        return isHighlighted;
+    }
+};
+
+// -----------------------------------------
+// 2b. یک فیلد قابل‌ویرایش در پنجره‌ی ویژگی‌ها (Properties Window - بخش ۴.۷)
+// -----------------------------------------
+struct PropertyField {
+    std::string label; // برچسبی که در پنجره نشان داده می‌شود، مثلا "Resistance (Ohm)"
+    std::string value;  // مقدار فعلی به‌صورت متن، برای نمایش/ویرایش در کادر متنی
 };
 
 // -----------------------------------------
@@ -41,29 +69,45 @@ public:
     float height = 40.0f;
     ComponentType type;
     std::vector<Pin> pins;
-    // تابعی برای رسم خط با در نظر گرفتن چرخش و قرینه
-    void DrawLine(SDL_Renderer* renderer, float x1, float y1, float x2, float y2) {
+
+    // ---------------------------------------------------------------
+    // تبدیل یک نقطه‌ی محلی (همان مختصاتی که در DrawLine و در
+    // offsetX/offsetY پین‌ها استفاده می‌شود) به مختصات جهانیِ بوم، با در
+    // نظر گرفتن موقعیت (x,y)، چرخش (angle) و قرینه‌بودن (isMirrored)
+    // قطعه. این تابع پیش‌تر به‌صورت یک لامبدای محلی داخل DrawLine مخفی
+    // بود؛ حالا عمومی است تا هم DrawLine و هم محاسبه‌ی موقعیت جهانیِ
+    // پین‌ها (برای تشخیص خودکار پایه‌ها - بخش ۵.۱) از همان منطق واحد
+    // استفاده کنند.
+    // ---------------------------------------------------------------
+    std::pair<float, float> LocalToWorld(float lx, float ly) const {
         float centerX = width / 2.0f;
         float centerY = height / 2.0f;
 
-        // تبدیل به مختصات نسبت به مرکز قطعه
-        auto transform = [&](float lx, float ly) -> std::pair<float, float> {
-            // 1. قرینه
-            if (isMirrored) lx = -lx;
+        float rx = lx - centerX;
+        float ry = ly - centerY;
 
-            // 2. چرخش (ساده‌سازی شده برای 90 درجه‌ها)
-            float rx = lx, ry = ly;
-            if (angle == 90) { rx = ly; ry = -lx; }
-            else if (angle == 180) { rx = -lx; ry = -ly; }
-            else if (angle == 270) { rx = -ly; ry = lx; }
+        // 1. قرینه
+        if (isMirrored) rx = -rx;
 
-            // 3. بازگشت به مختصات جهانی
-            return { x + centerX + rx, y + centerY + ry };
-        };
+        // 2. چرخش (ساده‌سازی شده برای 90 درجه‌ها)
+        float fx = rx, fy = ry;
+        if (angle == 90) { fx = ry; fy = -rx; }
+        else if (angle == 180) { fx = -rx; fy = -ry; }
+        else if (angle == 270) { fx = -ry; fy = rx; }
 
-        auto p1 = transform(x1 - centerX, y1 - centerY);
-        auto p2 = transform(x2 - centerX, y2 - centerY);
+        // 3. بازگشت به مختصات جهانی
+        return { x + centerX + fx, y + centerY + fy };
+    }
 
+    // موقعیت جهانیِ یک پینِ مشخص از این قطعه
+    std::pair<float, float> GetPinWorldPos(const Pin& pin) const {
+        return LocalToWorld(pin.offsetX, pin.offsetY);
+    }
+
+    // تابعی برای رسم خط با در نظر گرفتن چرخش و قرینه
+    void DrawLine(SDL_Renderer* renderer, float x1, float y1, float x2, float y2) {
+        auto p1 = LocalToWorld(x1, y1);
+        auto p2 = LocalToWorld(x2, y2);
         SDL_RenderLine(renderer, p1.first, p1.second, p2.first, p2.second);
     }
     // ===================================================
@@ -88,6 +132,22 @@ public:
                 mouseY >= y - pad && mouseY <= y + height + pad);
     }
     // ===================================================
+
+    // ---------------------------------------------------------------
+    // پنجره‌ی ویژگی‌ها (بخش ۴.۷): هر نوع قطعه فیلدهای اختصاصیِ خودش را
+    // معرفی می‌کند (مثلا مقاومت -> Resistance، منبع DC -> Voltage).
+    // کلاس پایه فقط «برچسب» را قابل ویرایش می‌داند؛ فرزندان می‌توانند
+    // این دو تابع را Override کنند تا فیلدهای بیشتری اضافه کنند.
+    // SetProperties با همان ترتیبی که GetProperties برگردانده صدا زده
+    // می‌شود (values[0] = مقدار جدید فیلد اول و ...).
+    // ---------------------------------------------------------------
+    virtual std::vector<PropertyField> GetProperties() {
+        return { { "Label", label } };
+    }
+
+    virtual void SetProperties(const std::vector<std::string>& values) {
+        if (!values.empty()) label = values[0];
+    }
 
     Component(float posX, float posY, ComponentType t)
         : x(posX), y(posY), type(t) {}
@@ -115,6 +175,8 @@ public:
 // ==========================================
 class ResistorComponent : public Component {
 public:
+    float resistanceOhms = 1000.0f; // مقدار مقاومت به اهم (پیش‌فرض 1k)
+
     ResistorComponent(float x, float y) : Component(x, y, ComponentType::RESISTOR) {
         label = "R"; width = 60; height = 40;
         pins.push_back({"1", 0, 20, false});
@@ -132,6 +194,19 @@ public:
         DrawLine(renderer, 35, 10, 45, 30);
         DrawLine(renderer, 45, 30, 50, 20);
     }
+
+    std::vector<PropertyField> GetProperties() override {
+        return {
+            { "Label", label },
+            { "Resistance (Ohm)", std::to_string((long long)resistanceOhms) }
+        };
+    }
+    void SetProperties(const std::vector<std::string>& values) override {
+        if (values.size() >= 1) label = values[0];
+        if (values.size() >= 2) {
+            try { resistanceOhms = std::stof(values[1]); } catch (...) {}
+        }
+    }
 };
 
 // ==========================================
@@ -139,6 +214,8 @@ public:
 // ==========================================
 class CapacitorComponent : public Component {
 public:
+    float capacitanceMicroFarad = 100.0f; // مقدار خازن به میکروفاراد
+
     CapacitorComponent(float x, float y) : Component(x, y, ComponentType::CAPACITOR) {
         label = "C"; width = 60; height = 40;
         pins.push_back({"1", 0, 20, false});
@@ -152,6 +229,19 @@ public:
         // صفحات موازی خازن (عمودی)
         DrawLine(renderer, 25, 5, 25, 35);
         DrawLine(renderer, 35, 5, 35, 35);
+    }
+
+    std::vector<PropertyField> GetProperties() override {
+        return {
+            { "Label", label },
+            { "Capacitance (uF)", std::to_string((long long)capacitanceMicroFarad) }
+        };
+    }
+    void SetProperties(const std::vector<std::string>& values) override {
+        if (values.size() >= 1) label = values[0];
+        if (values.size() >= 2) {
+            try { capacitanceMicroFarad = std::stof(values[1]); } catch (...) {}
+        }
     }
 };
 
@@ -242,6 +332,8 @@ public:
 // ==========================================
 class DCSourceComponent : public Component {
 public:
+    float voltage = 5.0f; // ولتاژ منبع (پیش‌فرض ۵ ولت)
+
     DCSourceComponent(float x, float y) : Component(x, y, ComponentType::DC_SOURCE) {
         label = "DC"; width = 40; height = 40;
         pins.push_back({"V+", 40, 20, true});
@@ -260,6 +352,22 @@ public:
         DrawLine(renderer, 15, 20, 25, 20);
         DrawLine(renderer, 20, 15, 20, 25);
     }
+
+    std::vector<PropertyField> GetProperties() override {
+        return {
+            { "Label", label },
+            { "Voltage (V)", std::to_string((long long)voltage) }
+        };
+    }
+    void SetProperties(const std::vector<std::string>& values) override {
+        if (values.size() >= 1) label = values[0];
+        if (values.size() >= 2) {
+            try {
+                voltage = std::stof(values[1]);
+                if (!pins.empty()) pins[0].voltage = voltage;
+            } catch (...) {}
+        }
+    }
 };
 
 // ==========================================
@@ -267,6 +375,8 @@ public:
 // ==========================================
 class BatteryComponent : public Component {
 public:
+    float voltage = 9.0f; // ولتاژ باتری (پیش‌فرض ۹ ولت)
+
     BatteryComponent(float x, float y) : Component(x, y, ComponentType::BATTERY) {
         label = "BAT"; width = 40; height = 60;
         pins.push_back({"+", 20, 0, true});
@@ -281,6 +391,22 @@ public:
         DrawLine(renderer, 12, 50, 28, 50);  // خط کوتاه
         DrawLine(renderer, 20, 50, 20, 60);  // پین پایین
     }
+
+    std::vector<PropertyField> GetProperties() override {
+        return {
+            { "Label", label },
+            { "Voltage (V)", std::to_string((long long)voltage) }
+        };
+    }
+    void SetProperties(const std::vector<std::string>& values) override {
+        if (values.size() >= 1) label = values[0];
+        if (values.size() >= 2) {
+            try {
+                voltage = std::stof(values[1]);
+                if (!pins.empty()) pins[0].voltage = voltage;
+            } catch (...) {}
+        }
+    }
 };
 
 // ==========================================
@@ -288,6 +414,8 @@ public:
 // ==========================================
 class ClockComponent : public Component {
 public:
+    float frequencyHz = 1.0f; // فرکانس پالس کلاک (پیش‌فرض ۱ هرتز)
+
     ClockComponent(float x, float y) : Component(x, y, ComponentType::CLOCK) {
         label = "CLK"; width = 40; height = 40;
         pins.push_back({"OUT", 40, 20, true});
@@ -307,6 +435,19 @@ public:
         DrawLine(renderer, 14, 15, 22, 15);
         DrawLine(renderer, 22, 15, 22, 25);
         DrawLine(renderer, 22, 25, 28, 25);
+    }
+
+    std::vector<PropertyField> GetProperties() override {
+        return {
+            { "Label", label },
+            { "Frequency (Hz)", std::to_string((long long)frequencyHz) }
+        };
+    }
+    void SetProperties(const std::vector<std::string>& values) override {
+        if (values.size() >= 1) label = values[0];
+        if (values.size() >= 2) {
+            try { frequencyHz = std::stof(values[1]); } catch (...) {}
+        }
     }
 };
 

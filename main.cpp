@@ -115,6 +115,14 @@ int main(int argc, char* argv[])
                         editor->StartPan(x, y);
                     }
                 }
+                // --- جدید: کلیک راست برای لغو حالت جای‌گذاری قطعه ---
+                else if (event.button.button == SDL_BUTTON_RIGHT)
+                {
+                    if (CurrentPage == EDITOR_PAGE && editor != nullptr)
+                    {
+                        editor->CancelPlacing();
+                    }
+                }
                 else if(CurrentPage == HOME_PAGE)
                 {
                     HandleMenuClick(x, y);

@@ -189,6 +189,73 @@ public:
         return outWireIndex >= 0;
     }
 
+    // Build a deterministic Manhattan route:
+    // start -> (end.x, start.y) -> end.
+    // No diagonal segment is ever produced.
+    static void BuildOrthogonalRoute(std::vector<WirePoint>& points,
+                                     WirePoint start,
+                                     WirePoint end,
+                                     int gridSpacing = 0) {
+        if (gridSpacing > 0) {
+            start = SnapPoint(start.x, start.y, gridSpacing);
+            end   = SnapPoint(end.x, end.y, gridSpacing);
+        }
+
+        points.clear();
+        points.push_back(start);
+
+        const float eps = 0.001f;
+
+        if (std::fabs(start.x - end.x) <= eps &&
+            std::fabs(start.y - end.y) <= eps) {
+            points.push_back(end);
+            return;
+        }
+
+        if (std::fabs(start.x - end.x) <= eps ||
+            std::fabs(start.y - end.y) <= eps) {
+            points.push_back(end);
+            return;
+        }
+
+        // Default policy: horizontal first, then vertical.
+        points.push_back({ end.x, start.y });
+        points.push_back(end);
+    }
+
+    // Rebuild connected wire geometry after component movement.
+    // Connected endpoints come from the current pin locations; free endpoints
+    // retain their current positions.
+    void UpdateConnectedWireRoutes(
+        const std::vector<std::unique_ptr<Component>>& components,
+        int gridSpacing = 0) {
+
+        for (auto& wire : wires) {
+            if (wire.points.empty()) continue;
+
+            WirePoint start = wire.points.front();
+            WirePoint end   = wire.points.back();
+
+            float x = 0.0f;
+            float y = 0.0f;
+
+            if (GetEndpointPosition(wire.start, components, x, y)) {
+                start = { x, y };
+            }
+
+            if (GetEndpointPosition(wire.end, components, x, y)) {
+                end = { x, y };
+            }
+
+            // Do not snap connected pin coordinates: preserve the exact
+            // position reported by Component::GetPinWorldPos().
+            BuildOrthogonalRoute(wire.points, start, end);
+        }
+
+        RebuildJunctions(components);
+        (void)gridSpacing;
+    }
+
     static void AddOrthogonalPoint(std::vector<WirePoint>& points,
                                    WirePoint target,
                                    int gridSpacing) {
@@ -279,7 +346,7 @@ public:
         const auto pos = component->GetPinWorldPos(component->pins[pinIndex]);
         WirePoint endPoint = { pos.first, pos.second };
 
-        AddOrthogonalPoint(activeWire.points, endPoint, gridSpacing);
+        BuildOrthogonalRoute(activeWire.points, activeWire.points.front(), endPoint, gridSpacing);
 
         if (activeWire.points.size() < 2) {
             Cancel();
@@ -302,7 +369,7 @@ public:
         if (!isDrawing) return false;
 
         WirePoint endPoint = SnapPoint(x, y, gridSpacing);
-        AddOrthogonalPoint(activeWire.points, endPoint, gridSpacing);
+        BuildOrthogonalRoute(activeWire.points, activeWire.points.front(), endPoint, gridSpacing);
 
         if (activeWire.points.size() < 2) {
             Cancel();

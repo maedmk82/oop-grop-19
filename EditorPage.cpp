@@ -648,6 +648,26 @@ EditorMenuAction EditorPage::HandleClick(int x, int y)
                 isDragging = true;
                 lastMouseX = wx;
                 lastMouseY = wy;
+
+                // نکته‌ی مهم: چون از این‌جا به بعد مختصات قطعه در هر فریمِ
+                // حرکت موس تغییر می‌کند، باید وضعیتِ «قبل از جابجایی» را
+                // همین الان (قبل از هر تغییری) برای Undo ذخیره کنیم؛
+                // در غیر این صورت Undo بعد از یک درگ کامل، به موقعیت
+                // درست قبل از جابجایی برنمی‌گردد.
+                SaveCurrentStateForUndo();
+
+                // ثبت موقعیت اولیه‌ی (بدون Snap) همه‌ی قطعات انتخاب‌شده و
+                // مختصات شروع موس، تا بتوانیم در هر فریمِ جابجایی، افستِ
+                // خام موس را نسبت به موقعیت اصلی محاسبه و Snap کنیم
+                // (به‌جای جمع‌کردن دلتاهای کوچک که باعث انحراف می‌شود).
+                dragOrigins.clear();
+                for (auto& c : components) {
+                    if (c->isSelected) {
+                        dragOrigins.push_back({ c.get(), c->x, c->y });
+                    }
+                }
+                dragStartMouseX = wx;
+                dragStartMouseY = wy;
                 break;
             }
         }
@@ -933,14 +953,20 @@ void EditorPage::HandleMouseMove(int x, int y) {
     }
 
     if (isDragging) {
-        float dx = wx - lastMouseX;
-        float dy = wy - lastMouseY;
-        for (auto& c : components) {
-            if (c->isSelected) {
-                c->x += dx;
-                c->y += dy;
-            }
+        // افستِ خامِ کل حرکت موس نسبت به نقطه‌ی شروع درگ (بدون Snap)
+        float totalDx = wx - dragStartMouseX;
+        float totalDy = wy - dragStartMouseY;
+
+        // برای هر قطعه‌ی انتخاب‌شده: موقعیت اصلی + افست خام = موقعیت هدف،
+        // سپس همان‌جا (زنده، حین کشیدن) به نزدیک‌ترین نقطه‌ی شبکه Snap می‌شود.
+        for (auto& origin : dragOrigins) {
+            float targetX = origin.origX + totalDx;
+            float targetY = origin.origY + totalDy;
+
+            origin.comp->x = std::round(targetX / (float)gridSpacing) * gridSpacing;
+            origin.comp->y = std::round(targetY / (float)gridSpacing) * gridSpacing;
         }
+
         lastMouseX = wx;
         lastMouseY = wy;
     }
@@ -952,13 +978,10 @@ void EditorPage::HandleMouseRelease(int x, int y) {
     }
 
     if (isDragging) {
-        SaveCurrentStateForUndo();
-        for (auto& c : components) {
-            if (c->isSelected) {
-                c->x = std::round(c->x / (float)gridSpacing) * gridSpacing;
-                c->y = std::round(c->y / (float)gridSpacing) * gridSpacing;
-            }
-        }
+        // موقعیت نهایی قطعات از قبل (در HandleMouseMove) روی شبکه Snap
+        // شده؛ و وضعیت Undo هم از ابتدای درگ ذخیره شده — اینجا فقط
+        // پاک‌سازی می‌کنیم.
+        dragOrigins.clear();
         isDragging = false;
     }
 

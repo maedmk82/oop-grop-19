@@ -1499,6 +1499,11 @@ void EditorPage::HandleMouseMove(int x, int y) {
             origin.comp->y = std::round(targetY / (float)gridSpacing) * gridSpacing;
         }
 
+        // The components now have their new positions, so their pin world
+        // coordinates are also current. Rebuild every connected wire route
+        // without deleting the wire or changing its logical endpoints.
+        wireSystem.UpdateConnectedWireRoutes(components, gridSpacing);
+
         lastMouseX = wx;
         lastMouseY = wy;
     }

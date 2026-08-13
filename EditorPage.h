@@ -50,6 +50,22 @@ private:
     void UpdateSearchFilter(); // تابع جدید برای فیلتر کردن قطعات
 
     // ================================================================
+    // ---------- سیستم سیم‌کشی: تشخیص خودکار پایه‌ها (بخش ۵.۱) ----------
+    // ================================================================
+    // در هر حرکت موس فراخوانی می‌شود: فاصله‌ی موس تا موقعیت جهانیِ هر
+    // پینِ هر قطعه را می‌سنجد و isHighlighted آن پین را به‌روز می‌کند.
+    void UpdatePinHighlights();
+
+    // رسم بصری همه‌ی پین‌ها (نقطه‌ی کوچک خاکستری، یا دایره‌ی زرد بزرگ‌تر
+    // وقتی هایلایت شده‌اند) — باید داخل بلاکِ تبدیل‌شده‌ی بومِ طراحی
+    // (Viewport/Scale فعال) فراخوانی شود.
+    void DrawPins(SDL_Renderer* renderer);
+
+    // رسم یک دایره‌ی توپر ساده با اسکن‌لاین افقی (SDL هیچ تابع آماده‌ای
+    // برای دایره ندارد)
+    void DrawFilledCircle(SDL_Renderer* renderer, float cx, float cy, float radius);
+
+    // ================================================================
     // ---------------------- Zoom & Pan (جدید) ----------------------
     // ================================================================
     float zoom = 1.0f;
@@ -72,6 +88,29 @@ private:
     // در کل برنامه (رسم + Snap) قابل تنظیم است.
     const int gridSpacing = 20;
 
+    // ================================================================
+    // ------------------- پنجره‌ی ویژگی‌ها (بخش ۴.۷) -------------------
+    // ================================================================
+    SDL_Window* ownerWindow = nullptr; // برای SDL_StartTextInput/SDL_StopTextInput
+
+    bool propertiesOpen = false;
+    Component* propertiesTarget = nullptr;
+    std::vector<PropertyField> propertiesFields; // برای برچسب هر فیلد (از GetProperties)
+    std::vector<std::string> propertiesEditText; // بافر متنیِ در حال ویرایش هر فیلد
+    int propertiesActiveField = -1;              // فیلدی که الان تایپ در آن وارد می‌شود
+
+    void OpenPropertiesFor(Component* comp);
+    void CloseProperties(bool applyChanges);
+    void DrawPropertiesPanel(SDL_Renderer* renderer, int windowW, int windowH);
+    bool HandlePropertiesClick(int x, int y);
+
+    // چیدمانِ پنجره را یک‌جا محاسبه می‌کند تا رسم و کلیک دقیقاً هم‌جهت باشند
+    void ComputePropertiesLayout(int windowW, int windowH,
+                                  SDL_FRect& panel,
+                                  std::vector<SDL_FRect>& fieldBoxes,
+                                  SDL_FRect& applyBtn,
+                                  SDL_FRect& cancelBtn) const;
+
 public:
     EditorPage(SDL_Window* window);
     std::string pageSize = "A4"; // متغیر جدید برای نگهداری سایز صفحه
@@ -82,7 +121,9 @@ public:
     void Draw(SDL_Renderer* renderer);
     bool exportRequested = false;
     void ExportToImage(SDL_Renderer* renderer);
-    EditorMenuAction HandleClick(int x, int y);
+    // clickCount از event.button.clicks در SDL3 می‌آید (۱=تک‌کلیک، ۲=دابل‌کلیک)
+    // و برای باز کردن پنجره‌ی ویژگی‌ها با دابل‌کلیک روی قطعه استفاده می‌شود.
+    EditorMenuAction HandleClick(int x, int y, int clickCount = 1);
     void HandleMouseMotion(int x, int y);
     // خروجی این تابع برای میانبرهایی مثل Ctrl+S استفاده می‌شود که باید
     // به main.cpp اطلاع دهند (مثلاً برای ذخیره‌ی واقعی فایل روی دیسک)

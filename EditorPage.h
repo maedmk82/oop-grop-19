@@ -102,6 +102,20 @@ public:
     float selStartX = 0, selStartY = 0;
     float lastMouseX = 0, lastMouseY = 0;
 
+    // ---------------------------------------------------------------
+    // Snap زنده هنگام درگ: موقعیت اصلیِ (بدون Snap) هر قطعه‌ی انتخاب‌شده
+    // را در لحظه‌ی شروع درگ ذخیره می‌کنیم تا بتوانیم افستِ خامِ موس را
+    // نسبت به آن حساب و در هر فریم روی شبکه Snap کنیم — بدون انحراف.
+    // ---------------------------------------------------------------
+    struct DragOrigin {
+        Component* comp;
+        float origX;
+        float origY;
+    };
+    std::vector<DragOrigin> dragOrigins;
+    float dragStartMouseX = 0.0f;
+    float dragStartMouseY = 0.0f;
+
     // توابع موس
     void HandleMouseMove(int x, int y);
     void HandleMouseRelease(int x, int y);

@@ -8,6 +8,8 @@
 EditorPage::EditorPage(SDL_Window* window)
     : search(window)
 {
+    ownerWindow = window;
+
     allTools = {
         {"GND (Ground)", ComponentType::GND},
         {"DC Voltage", ComponentType::DC_SOURCE},
@@ -124,6 +126,262 @@ void EditorPage::ResetView()
     panOffsetX = 0.0f;
     panOffsetY = 0.0f;
 }
+
+//-----------------------------------------
+// پنجره‌ی ویژگی‌ها (Properties Window - بخش ۴.۷)
+//-----------------------------------------
+void EditorPage::OpenPropertiesFor(Component* comp)
+{
+    if (!comp) return;
+
+    propertiesTarget = comp;
+    propertiesFields = comp->GetProperties();
+
+    propertiesEditText.clear();
+    for (auto& f : propertiesFields) {
+        propertiesEditText.push_back(f.value);
+    }
+
+    propertiesActiveField = propertiesFields.empty() ? -1 : 0;
+    propertiesOpen = true;
+
+    // شروع دریافت ورودی متنی از سیستم‌عامل (بدون این، رویداد
+    // SDL_EVENT_TEXT_INPUT اصلاً تولید نمی‌شود)
+    if (ownerWindow) {
+        SDL_StartTextInput(ownerWindow);
+    }
+}
+
+void EditorPage::CloseProperties(bool applyChanges)
+{
+    // تغییرات فقط وقتی روی خودِ قطعه اعمال می‌شوند که کاربر «تایید»
+    // کرده باشد؛ در حالت انصراف/Esc هیچ تغییری در مدار اعمال نمی‌شود.
+    if (applyChanges && propertiesTarget) {
+        propertiesTarget->SetProperties(propertiesEditText);
+    }
+
+    propertiesOpen = false;
+    propertiesTarget = nullptr;
+    propertiesFields.clear();
+    propertiesEditText.clear();
+    propertiesActiveField = -1;
+
+    if (ownerWindow) {
+        SDL_StopTextInput(ownerWindow);
+    }
+}
+
+void EditorPage::ComputePropertiesLayout(int windowW, int windowH,
+                                          SDL_FRect& panel,
+                                          std::vector<SDL_FRect>& fieldBoxes,
+                                          SDL_FRect& applyBtn,
+                                          SDL_FRect& cancelBtn) const
+{
+    int fieldCount = (int)propertiesFields.size();
+    float panelW = 340.0f;
+    float fieldH = 34.0f;
+    float rowH = fieldH + 32.0f; // فاصله‌ی هر ردیف (برچسب + کادر متن)
+    float panelH = 70.0f + fieldCount * rowH + 50.0f;
+
+    float panelX = ((float)windowW - panelW) / 2.0f;
+    float panelY = ((float)windowH - panelH) / 2.0f;
+
+    panel = { panelX, panelY, panelW, panelH };
+
+    fieldBoxes.clear();
+    float curY = panelY + 46.0f;
+    for (int i = 0; i < fieldCount; i++) {
+        SDL_FRect box = { panelX + 14.0f, curY + 20.0f, panelW - 28.0f, fieldH };
+        fieldBoxes.push_back(box);
+        curY += rowH;
+    }
+
+    applyBtn  = { panelX + 14.0f, panelY + panelH - 42.0f, 140.0f, 30.0f };
+    cancelBtn = { panelX + panelW - 154.0f, panelY + panelH - 42.0f, 140.0f, 30.0f };
+}
+
+void EditorPage::DrawPropertiesPanel(SDL_Renderer* renderer, int windowW, int windowH)
+{
+    if (!propertiesOpen || !propertiesTarget) return;
+
+    // پرده‌ی نیمه‌شفاف پشت پنجره (حالت Modal - بقیه‌ی صفحه غیرقابل کلیک است)
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 120);
+    SDL_FRect overlay = { 0, 0, (float)windowW, (float)windowH };
+    SDL_RenderFillRect(renderer, &overlay);
+
+    SDL_FRect panel, applyBtn, cancelBtn;
+    std::vector<SDL_FRect> fieldBoxes;
+    ComputePropertiesLayout(windowW, windowH, panel, fieldBoxes, applyBtn, cancelBtn);
+
+    SDL_SetRenderDrawColor(renderer, 250, 250, 250, 255);
+    SDL_RenderFillRect(renderer, &panel);
+    SDL_SetRenderDrawColor(renderer, 90, 90, 90, 255);
+    SDL_RenderRect(renderer, &panel);
+
+    SDL_Color black = {20, 20, 20, 255};
+
+    // عنوان: نوع/برچسب قطعه‌ای که در حال ویرایش آن هستیم
+    std::string title = "Properties: " + propertiesTarget->label;
+    SDL_Texture* tTitle = TextRenderer::CreateText(renderer, title.c_str(), black);
+    if (tTitle) {
+        float tw = 0, th = 0;
+        SDL_GetTextureSize(tTitle, &tw, &th);
+        SDL_FRect p = { panel.x + 14, panel.y + 12, tw, th };
+        SDL_RenderTexture(renderer, tTitle, NULL, &p);
+        SDL_DestroyTexture(tTitle);
+    }
+
+    // هر فیلد: برچسب بالای کادر + کادر متنیِ قابل‌ویرایش
+    for (size_t i = 0; i < propertiesFields.size(); i++) {
+        SDL_Texture* tLabel = TextRenderer::CreateText(renderer, propertiesFields[i].label.c_str(), black);
+        if (tLabel) {
+            float tw = 0, th = 0;
+            SDL_GetTextureSize(tLabel, &tw, &th);
+            SDL_FRect p = { fieldBoxes[i].x, fieldBoxes[i].y - 22, tw, th };
+            SDL_RenderTexture(renderer, tLabel, NULL, &p);
+            SDL_DestroyTexture(tLabel);
+        }
+
+        bool active = ((int)i == propertiesActiveField);
+        SDL_SetRenderDrawColor(renderer, active ? 235 : 255, active ? 245 : 255, 255, 255);
+        SDL_RenderFillRect(renderer, &fieldBoxes[i]);
+        SDL_SetRenderDrawColor(renderer, active ? 30 : 150, active ? 120 : 150, active ? 220 : 150, 255);
+        SDL_RenderRect(renderer, &fieldBoxes[i]);
+
+        std::string shown = propertiesEditText[i];
+        if (active) shown += "|"; // نشانگر تایپ ساده (کرسور)
+        SDL_Texture* tVal = TextRenderer::CreateText(renderer, shown.c_str(), black);
+        if (tVal) {
+            float tw = 0, th = 0;
+            SDL_GetTextureSize(tVal, &tw, &th);
+            SDL_FRect p = { fieldBoxes[i].x + 6, fieldBoxes[i].y + (fieldBoxes[i].h - th) / 2.0f, tw, th };
+            SDL_RenderTexture(renderer, tVal, NULL, &p);
+            SDL_DestroyTexture(tVal);
+        }
+    }
+
+    // دکمه‌ی تایید
+    SDL_SetRenderDrawColor(renderer, 190, 230, 190, 255);
+    SDL_RenderFillRect(renderer, &applyBtn);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &applyBtn);
+    SDL_Texture* tApply = TextRenderer::CreateText(renderer, "Apply", black);
+    if (tApply) {
+        float tw = 0, th = 0;
+        SDL_GetTextureSize(tApply, &tw, &th);
+        SDL_FRect p = { applyBtn.x + 10, applyBtn.y + 5, tw, th };
+        SDL_RenderTexture(renderer, tApply, NULL, &p);
+        SDL_DestroyTexture(tApply);
+    }
+
+    // دکمه‌ی انصراف
+    SDL_SetRenderDrawColor(renderer, 230, 190, 190, 255);
+    SDL_RenderFillRect(renderer, &cancelBtn);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderRect(renderer, &cancelBtn);
+    SDL_Texture* tCancel = TextRenderer::CreateText(renderer, "Cancel", black);
+    if (tCancel) {
+        float tw = 0, th = 0;
+        SDL_GetTextureSize(tCancel, &tw, &th);
+        SDL_FRect p = { cancelBtn.x + 10, cancelBtn.y + 5, tw, th };
+        SDL_RenderTexture(renderer, tCancel, NULL, &p);
+        SDL_DestroyTexture(tCancel);
+    }
+}
+
+bool EditorPage::HandlePropertiesClick(int x, int y)
+{
+    if (!propertiesOpen) return false;
+
+    SDL_FRect panel, applyBtn, cancelBtn;
+    std::vector<SDL_FRect> fieldBoxes;
+    ComputePropertiesLayout(lastWindowW, lastWindowH, panel, fieldBoxes, applyBtn, cancelBtn);
+
+    // کلیک روی دکمه‌ی تایید: تغییرات را روی قطعه اعمال کن
+    if (x >= applyBtn.x && x <= applyBtn.x + applyBtn.w && y >= applyBtn.y && y <= applyBtn.y + applyBtn.h) {
+        SaveCurrentStateForUndo();
+        CloseProperties(true);
+        return true;
+    }
+
+    // کلیک روی دکمه‌ی انصراف: بدون اعمال تغییرات ببند
+    if (x >= cancelBtn.x && x <= cancelBtn.x + cancelBtn.w && y >= cancelBtn.y && y <= cancelBtn.y + cancelBtn.h) {
+        CloseProperties(false);
+        return true;
+    }
+
+    // کلیک روی یکی از فیلدها: آن فیلد را برای تایپ فعال کن
+    for (size_t i = 0; i < fieldBoxes.size(); i++) {
+        SDL_FRect& b = fieldBoxes[i];
+        if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+            propertiesActiveField = (int)i;
+            return true;
+        }
+    }
+
+    // کلیک بیرون از پنل (روی پرده‌ی تیره): مثل انصراف عمل کن
+    if (!(x >= panel.x && x <= panel.x + panel.w && y >= panel.y && y <= panel.y + panel.h)) {
+        CloseProperties(false);
+        return true;
+    }
+
+    // کلیک روی جای خالیِ داخل پنل: فقط مصرفش کن، کاری نکن
+    return true;
+}
+
+//-----------------------------------------
+// سیستم سیم‌کشی: تشخیص خودکار پایه‌ها (بخش ۵.۱)
+//-----------------------------------------
+void EditorPage::UpdatePinHighlights()
+{
+    // در حلقه‌ی اصلی (اینجا: هر رویداد حرکت موس)، فاصله‌ی موس تا موقعیت
+    // جهانیِ هر پینِ هر قطعه سنجیده می‌شود تا کاربر ببیند از کجا می‌تواند
+    // سیم‌کشی را شروع/تمام کند.
+    for (auto& comp : components) {
+        for (auto& pin : comp->pins) {
+            auto worldPos = comp->GetPinWorldPos(pin);
+            pin.checkMouseOver(worldPos.first, worldPos.second, worldMouseX, worldMouseY);
+        }
+    }
+}
+
+void EditorPage::DrawFilledCircle(SDL_Renderer* renderer, float cx, float cy, float radius)
+{
+    // SDL تابع آماده‌ای برای دایره‌ی توپر ندارد؛ با رسم خطوط افقیِ
+    // پیاپی (اسکن‌لاین) یک دایره‌ی توپر تقریبی می‌سازیم.
+    int r = (int)std::ceil(radius);
+    for (int dy = -r; dy <= r; dy++) {
+        float remain = (float)(r * r) - (float)(dy * dy);
+        if (remain < 0) continue;
+        int dx = (int)std::sqrt(remain);
+        SDL_RenderLine(renderer, cx - dx, cy + dy, cx + dx, cy + dy);
+    }
+}
+
+void EditorPage::DrawPins(SDL_Renderer* renderer)
+{
+    // توجه: این تابع باید وقتی صدا زده شود که Viewport/Scale بومِ طراحی
+    // فعال است (یعنی مختصات پین‌ها، مختصات جهانی/World هستند).
+    for (auto& comp : components) {
+        for (auto& pin : comp->pins) {
+            auto worldPos = comp->GetPinWorldPos(pin);
+
+            if (pin.isHighlighted) {
+                // پین هایلایت‌شده: دایره‌ی زرد بزرگ‌تر و پررنگ - یعنی
+                // کاربر می‌تواند از این‌جا سیم‌کشی را شروع/تمام کند
+                SDL_SetRenderDrawColor(renderer, 255, 200, 0, 255);
+                DrawFilledCircle(renderer, worldPos.first, worldPos.second, pin.sensitivityRadius);
+                SDL_SetRenderDrawColor(renderer, 160, 110, 0, 255);
+                DrawFilledCircle(renderer, worldPos.first, worldPos.second, 1.5f);
+            } else {
+                // پین عادی: نقطه‌ی کوچک خاکستری
+                SDL_SetRenderDrawColor(renderer, 90, 90, 90, 255);
+                DrawFilledCircle(renderer, worldPos.first, worldPos.second, 3.0f);
+            }
+        }
+    }
+}
+
 
 //-----------------------------------------
 // Draw Helpers
@@ -378,6 +636,10 @@ void EditorPage::Draw(SDL_Renderer* renderer)
         }
     }
 
+    // رسم پین‌های همه‌ی قطعات (بخش ۵.۱): نقطه‌ی خاکستری معمولی، یا
+    // دایره‌ی زرد بزرگ‌تر وقتی موس در محدوده‌ی حساسیتِ آن پین است
+    DrawPins(renderer);
+
     // مستطیل انتخاب گروهی (در فضای جهانی)
     if (isSelectingBox) {
         SDL_SetRenderDrawColor(renderer, 0, 150, 255, 50);
@@ -510,6 +772,9 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     // نوار وضعیت پایین صفحه (مختصات + زوم + دکمه Reset)
     DrawStatusBar(renderer, winW, winH);
 
+    // پنجره‌ی ویژگی‌ها (اگر باز باشد) باید روی همه‌چیز رسم شود (بخش ۴.۷)
+    DrawPropertiesPanel(renderer, winW, winH);
+
     if (exportRequested) {
         ExportToImage(renderer);
         exportRequested = false;
@@ -519,8 +784,15 @@ void EditorPage::Draw(SDL_Renderer* renderer)
 //-----------------------------------------
 // Mouse & Keyboard
 //-----------------------------------------
-EditorMenuAction EditorPage::HandleClick(int x, int y)
+EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
 {
+    // اگر پنجره‌ی ویژگی‌ها باز است، تمام کلیک‌ها را خودش مصرف می‌کند
+    // (حالت Modal) — هیچ تعامل دیگری با بوم/سایدبار/نوار ابزار مجاز نیست.
+    if (propertiesOpen) {
+        HandlePropertiesClick(x, y);
+        return (EditorMenuAction)0;
+    }
+
     // دکمه‌ی «بازگشت به ۱۰۰٪» در نوار وضعیت پایین صفحه (فضای صفحه)
     SDL_FRect resetBtn = { (float)(lastWindowW - 80), (float)(lastWindowH - 24), 70, 22 };
     if (x >= resetBtn.x && x <= resetBtn.x + resetBtn.w && y >= resetBtn.y && y <= resetBtn.y + resetBtn.h) {
@@ -625,6 +897,18 @@ EditorMenuAction EditorPage::HandleClick(int x, int y)
         return (EditorMenuAction)0;
     }
 
+    // ---------------- دابل‌کلیک روی قطعه: باز کردن پنجره‌ی ویژگی‌ها (بخش ۴.۷) ----------------
+    // SDL3 خودش تعداد کلیک‌های پیاپی را در event.button.clicks می‌شمارد،
+    // پس نیازی به تایمر دستی برای تشخیص دابل‌کلیک نیست.
+    if (!isPlacingMode && clickCount >= 2 && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
+        for (auto it = components.rbegin(); it != components.rend(); ++it) {
+            if ((*it)->Contains(wx, wy)) {
+                OpenPropertiesFor(it->get());
+                return (EditorMenuAction)0;
+            }
+        }
+    }
+
     // ---------------- تعامل با قطعات موجود (کلیک روی کلید/سوییچ و ...) ----------------
     if (!isPlacingMode) {
         for (auto& comp : components) {
@@ -685,6 +969,49 @@ EditorMenuAction EditorPage::HandleClick(int x, int y)
 
 EditorMenuAction EditorPage::HandleKeyboard(SDL_Event event)
 {
+    // ---------------------------------------------------------------
+    // اگر پنجره‌ی ویژگی‌ها باز است، کیبورد فقط برای ویرایش فیلد فعال
+    // است — نه سرچ‌باکس و نه هیچ‌کدام از میانبرهای دیگر (حالت Modal).
+    // ---------------------------------------------------------------
+    if (propertiesOpen) {
+        if (event.type == SDL_EVENT_TEXT_INPUT) {
+            if (propertiesActiveField >= 0 && propertiesActiveField < (int)propertiesEditText.size()) {
+                propertiesEditText[propertiesActiveField] += event.text.text;
+            }
+            return (EditorMenuAction)0;
+        }
+
+        if (event.type == SDL_EVENT_KEY_DOWN) {
+            if (event.key.key == SDLK_BACKSPACE) {
+                if (propertiesActiveField >= 0 && propertiesActiveField < (int)propertiesEditText.size()) {
+                    std::string& s = propertiesEditText[propertiesActiveField];
+                    if (!s.empty()) s.pop_back();
+                }
+                return (EditorMenuAction)0;
+            }
+            if (event.key.key == SDLK_TAB) {
+                // جابه‌جایی بین فیلدها با Tab
+                if (!propertiesEditText.empty()) {
+                    propertiesActiveField = (propertiesActiveField + 1) % (int)propertiesEditText.size();
+                }
+                return (EditorMenuAction)0;
+            }
+            if (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER) {
+                // Enter مثل زدن دکمه‌ی Apply عمل می‌کند
+                SaveCurrentStateForUndo();
+                CloseProperties(true);
+                return (EditorMenuAction)0;
+            }
+            if (event.key.key == SDLK_ESCAPE) {
+                // Esc مثل زدن دکمه‌ی Cancel عمل می‌کند (بدون اعمال تغییرات)
+                CloseProperties(false);
+                return (EditorMenuAction)0;
+            }
+        }
+
+        return (EditorMenuAction)0;
+    }
+
     search.HandleKeyboard(event);
 
     if (event.type == SDL_EVENT_KEY_DOWN) {
@@ -946,6 +1273,10 @@ void EditorPage::HandleMouseMove(int x, int y) {
     ScreenToWorld(x, y, wx, wy);
     worldMouseX = wx;
     worldMouseY = wy;
+
+    // بخش ۵.۱ - تشخیص خودکار پایه‌ها: در هر حرکت موس (حلقه‌ی اصلی رویداد)
+    // فاصله‌ی موس تا همه‌ی پین‌های همه‌ی قطعات سنجیده و هایلایت می‌شود.
+    UpdatePinHighlights();
 
     if (isPanning) {
         UpdatePan(x, y);

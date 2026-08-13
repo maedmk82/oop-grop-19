@@ -4,13 +4,10 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
-// در صورتی که TextRenderer دارید آن را اینکلود کنید تا نام قطعات روی دکمه‌ها نوشته شود
-// #include "TextRenderer.h"
 
 EditorPage::EditorPage(SDL_Window* window)
     : search(window)
 {
-    // لیست کامل قطعات با نام‌های استاندارد (حتی کلمات مخفف برای سرچ بهتر)
     allTools = {
         {"GND (Ground)", ComponentType::GND},
         {"DC Voltage", ComponentType::DC_SOURCE},
@@ -27,7 +24,7 @@ EditorPage::EditorPage(SDL_Window* window)
         {"OR Gate", ComponentType::GATE_OR},
         {"NOT Gate", ComponentType::GATE_NOT},
         {"NAND Gate", ComponentType::GATE_NAND},
-        {"NOR Gate", ComponentType::GATE_NOR}, // مطمئن شوید GATE_NOR در Enum شما باشد
+        {"NOR Gate", ComponentType::GATE_NOR},
         {"XOR Gate", ComponentType::GATE_XOR},
         {"FlipFlop D", ComponentType::FLIP_FLOP_D}
     };
@@ -40,9 +37,7 @@ EditorPage::EditorPage(SDL_Window* window)
 //-----------------------------------------
 void EditorPage::UpdateSearchFilter()
 {
-    std::string query = search.GetText(); // گرفتن متن از SearchBox
-
-    // تبدیل حروف جستجو به کوچک (برای سرچ Case-Insensitive)
+    std::string query = search.GetText();
     std::transform(query.begin(), query.end(), query.begin(), ::tolower);
 
     filteredTools.clear();
@@ -51,7 +46,6 @@ void EditorPage::UpdateSearchFilter()
         std::string toolName = tool.name;
         std::transform(toolName.begin(), toolName.end(), toolName.begin(), ::tolower);
 
-        // اگر جستجو خالی است یا نام قطعه شامل کلمه جستجو شده است، آن را به لیست اضافه کن
         if (query.empty() || toolName.find(query) != std::string::npos) {
             filteredTools.push_back(tool);
         }
@@ -59,12 +53,87 @@ void EditorPage::UpdateSearchFilter()
 }
 
 //-----------------------------------------
+// Zoom / Pan / Coordinate helpers
+//-----------------------------------------
+void EditorPage::ScreenToWorld(int sx, int sy, float& wx, float& wy) const
+{
+    wx = ((float)sx - (canvasBaseX + panOffsetX)) / zoom;
+    wy = ((float)sy - (canvasBaseY + panOffsetY)) / zoom;
+}
+
+void EditorPage::HandleMouseWheel(float wheelY, int mouseX, int mouseY)
+{
+    if (wheelY == 0.0f) return;
+
+    float oldZoom = zoom;
+    float zoomFactor = 1.0f + (wheelY > 0 ? 0.1f : -0.1f);
+    float newZoom = zoom * zoomFactor;
+
+    if (newZoom < minZoom) newZoom = minZoom;
+    if (newZoom > maxZoom) newZoom = maxZoom;
+    if (newZoom == oldZoom) return;
+
+    // نقطه‌ی زیر نشانگر موس باید بعد از زوم هم ثابت بماند (Zoom to cursor)
+    float worldXBefore = ((float)mouseX - (canvasBaseX + panOffsetX)) / oldZoom;
+    float worldYBefore = ((float)mouseY - (canvasBaseY + panOffsetY)) / oldZoom;
+
+    zoom = newZoom;
+
+    panOffsetX = (float)mouseX - canvasBaseX - worldXBefore * zoom;
+    panOffsetY = (float)mouseY - canvasBaseY - worldYBefore * zoom;
+
+    if (panOffsetX > panLimit) panOffsetX = panLimit;
+    if (panOffsetX < -panLimit) panOffsetX = -panLimit;
+    if (panOffsetY > panLimit) panOffsetY = panLimit;
+    if (panOffsetY < -panLimit) panOffsetY = -panLimit;
+}
+
+void EditorPage::StartPan(int x, int y)
+{
+    isPanning = true;
+    panMouseStartX = (float)x;
+    panMouseStartY = (float)y;
+    panOffsetStartX = panOffsetX;
+    panOffsetStartY = panOffsetY;
+}
+
+void EditorPage::UpdatePan(int x, int y)
+{
+    if (!isPanning) return;
+
+    float dx = (float)x - panMouseStartX;
+    float dy = (float)y - panMouseStartY;
+
+    panOffsetX = panOffsetStartX + dx;
+    panOffsetY = panOffsetStartY + dy;
+
+    if (panOffsetX > panLimit) panOffsetX = panLimit;
+    if (panOffsetX < -panLimit) panOffsetX = -panLimit;
+    if (panOffsetY > panLimit) panOffsetY = panLimit;
+    if (panOffsetY < -panLimit) panOffsetY = -panLimit;
+}
+
+void EditorPage::StopPan()
+{
+    isPanning = false;
+}
+
+void EditorPage::ResetView()
+{
+    zoom = 1.0f;
+    panOffsetX = 0.0f;
+    panOffsetY = 0.0f;
+}
+
+//-----------------------------------------
 // Draw Helpers
 //-----------------------------------------
 void EditorPage::DrawGrid(SDL_Renderer* renderer)
 {
+    // این تابع نگه‌داشته شده برای سازگاری با کد قبلی؛ رسم اصلی شبکه
+    // اکنون داخل Draw() و با پشتیبانی از Zoom/Pan انجام می‌شود.
     SDL_SetRenderDrawColor(renderer, 215, 215, 215, 255);
-    int gridSize = 20;
+    int gridSize = gridSpacing;
 
     for (float x = 100; x < 950; x += gridSize) {
         SDL_RenderLine(renderer, x, 50, x, 600);
@@ -76,46 +145,38 @@ void EditorPage::DrawGrid(SDL_Renderer* renderer)
 
 void EditorPage::DrawSidebar(SDL_Renderer* renderer)
 {
-    // ۱. پس‌زمینه نوار ابزار سمت چپ
     SDL_FRect sidebarArea = { 0, 50, 100, 550 };
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
     SDL_RenderFillRect(renderer, &sidebarArea);
 
-    // ۲. رسم دکمه‌ها بر اساس لیست فیلتر شده (filteredTools)
     int startY = 70;
     for (size_t i = 0; i < filteredTools.size(); i++) {
         SDL_FRect btnRect = { 10, (float)(startY + i * 40), 80, 30 };
 
-        // تغییر رنگ دکمه در صورت انتخاب شدن قطعه (آبی فیروزه‌ای)
         if (isPlacingMode && selectedTool == filteredTools[i].type) {
             SDL_SetRenderDrawColor(renderer, 140, 240, 240, 255);
         } else {
             SDL_SetRenderDrawColor(renderer, 230, 230, 230, 255);
         }
 
-        // رسم پس‌زمینه دکمه
         SDL_RenderFillRect(renderer, &btnRect);
 
-        // رسم حاشیه دکمه
         SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
         SDL_RenderRect(renderer, &btnRect);
 
-        // ۳. رسم نام قطعه داخل دکمه
-        SDL_Color textColor = {0, 0, 0, 255}; // رنگ مشکی برای متن
+        SDL_Color textColor = {0, 0, 0, 255};
         SDL_Texture* txt = TextRenderer::CreateText(renderer, filteredTools[i].name.c_str(), textColor);
 
         if (txt) {
             float texW = 0, texH = 0;
             SDL_GetTextureSize(txt, &texW, &texH);
 
-            // جلوگیری از بیرون زدن متن از کادر دکمه (اگر اسم قطعه طولانی بود)
             if (texW > 75) texW = 75;
             if (texH > 20) texH = 20;
 
-            // محاسبه موقعیت متن برای قرار گرفتن در وسط نسبی دکمه
             SDL_FRect txtPos = {
-                12,                                 // فاصله از چپ
-                (float)(startY + i * 40 + 5),       // فاصله از بالا
+                12,
+                (float)(startY + i * 40 + 5),
                 texW,
                 texH
             };
@@ -126,49 +187,179 @@ void EditorPage::DrawSidebar(SDL_Renderer* renderer)
     }
 }
 
+// علامت مبدأ مختصات (0,0) بوم — این تابع باید هنگامی صدا زده شود که
+// Viewport/Scale بوم فعال است (یعنی داخل بلاک رسم World-space)
+void EditorPage::DrawOriginMarker(SDL_Renderer* renderer)
+{
+    SDL_SetRenderDrawColor(renderer, 200, 30, 30, 210);
+
+    // اندازه‌ی ثابت روی صفحه، مستقل از سطح زوم
+    float s = 9.0f / zoom;
+
+    SDL_RenderLine(renderer, -s, 0, s, 0);
+    SDL_RenderLine(renderer, 0, -s, 0, s);
+
+    float boxSize = 6.0f / zoom;
+    SDL_FRect box = { -boxSize / 2.0f, -boxSize / 2.0f, boxSize, boxSize };
+    SDL_RenderRect(renderer, &box);
+}
+
+// نوار وضعیت پایین صفحه: مختصات لحظه‌ای موس + درصد زوم + دکمه بازگشت به ۱۰۰٪
+void EditorPage::DrawStatusBar(SDL_Renderer* renderer, int windowW, int windowH)
+{
+    const int barHeight = 26;
+
+    SDL_FRect bar = { 0, (float)(windowH - barHeight), (float)windowW, (float)barHeight };
+    SDL_SetRenderDrawColor(renderer, 235, 235, 235, 255);
+    SDL_RenderFillRect(renderer, &bar);
+
+    SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
+    SDL_RenderLine(renderer, 0, (float)(windowH - barHeight), (float)windowW, (float)(windowH - barHeight));
+
+    SDL_Color black = {30, 30, 30, 255};
+
+    // --- مختصات لحظه‌ای نشانگر موس (نسبت به مبدأ بوم) ---
+    std::ostringstream coordStream;
+    if (currentMouseX >= (int)canvasBaseX && currentMouseY >= (int)canvasBaseY) {
+        coordStream << "X: " << (int)std::round(worldMouseX) << "   Y: " << (int)std::round(worldMouseY);
+    } else {
+        coordStream << "X: --   Y: --";
+    }
+    std::string coordText = coordStream.str();
+
+    SDL_Texture* tCoord = TextRenderer::CreateText(renderer, coordText.c_str(), black);
+    if (tCoord) {
+        float tw = 0, th = 0;
+        SDL_GetTextureSize(tCoord, &tw, &th);
+        SDL_FRect p = { 15, (float)(windowH - barHeight + 4), tw, th };
+        SDL_RenderTexture(renderer, tCoord, NULL, &p);
+        SDL_DestroyTexture(tCoord);
+    }
+
+    // --- وضعیت پن (اگر در حال جابه‌جایی بوم هستیم) ---
+    if (isPanning) {
+        SDL_Texture* tPan = TextRenderer::CreateText(renderer, "Panning...", black);
+        if (tPan) {
+            float tw = 0, th = 0;
+            SDL_GetTextureSize(tPan, &tw, &th);
+            SDL_FRect p = { 220, (float)(windowH - barHeight + 4), tw, th };
+            SDL_RenderTexture(renderer, tPan, NULL, &p);
+            SDL_DestroyTexture(tPan);
+        }
+    }
+
+    // --- درصد زوم ---
+    std::ostringstream zoomStream;
+    zoomStream << "Zoom: " << (int)std::round(zoom * 100) << "%";
+    std::string zoomText = zoomStream.str();
+
+    SDL_Texture* tZoom = TextRenderer::CreateText(renderer, zoomText.c_str(), black);
+    if (tZoom) {
+        float tw = 0, th = 0;
+        SDL_GetTextureSize(tZoom, &tw, &th);
+        SDL_FRect p = { (float)(windowW - tw - 100), (float)(windowH - barHeight + 4), tw, th };
+        SDL_RenderTexture(renderer, tZoom, NULL, &p);
+        SDL_DestroyTexture(tZoom);
+    }
+
+    // --- دکمه‌ی بازگشت به ۱۰۰٪ (مطابق با محدوده‌ی چک‌شده در HandleClick) ---
+    SDL_FRect resetBtn = { (float)(windowW - 80), (float)(windowH - barHeight + 2), 70, (float)(barHeight - 4) };
+    SDL_SetRenderDrawColor(renderer, 210, 225, 250, 255);
+    SDL_RenderFillRect(renderer, &resetBtn);
+    SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+    SDL_RenderRect(renderer, &resetBtn);
+
+    SDL_Texture* tReset = TextRenderer::CreateText(renderer, "Reset 100%", black);
+    if (tReset) {
+        float tw = 0, th = 0;
+        SDL_GetTextureSize(tReset, &tw, &th);
+        if (tw > resetBtn.w - 6) tw = resetBtn.w - 6;
+        if (th > resetBtn.h - 4) th = resetBtn.h - 4;
+        SDL_FRect p = { resetBtn.x + 3, resetBtn.y + 2, tw, th };
+        SDL_RenderTexture(renderer, tReset, NULL, &p);
+        SDL_DestroyTexture(tReset);
+    }
+}
+
 //-----------------------------------------
 // Draw
 //-----------------------------------------
 void EditorPage::Draw(SDL_Renderer* renderer)
 {
-    // همیشه فیلتر را قبل از رسم آپدیت کن تا با تایپ کاربر لیست سریع تغییر کند
     UpdateSearchFilter();
 
-    // ------------------------------------
-    // رسم صفحه شطرنجی (Grid) با ابعاد پویا (A3 یا A4)
-    // ------------------------------------
     bool isA3 = (pageSize.find("A3") != std::string::npos);
 
     float gridMaxX = isA3 ? 1350.0f : 950.0f;
     float gridMaxY = isA3 ? 800.0f : 600.0f;
 
-    // پس‌زمینه کل پنجره بر اساس سایز جدید
-    SDL_SetRenderDrawColor(renderer, 245, 245, 245, 255);
-    SDL_FRect area = { 0, 0, gridMaxX, gridMaxY };
-    SDL_RenderFillRect(renderer, &area);
+    // اندازه‌ی کاغذ در مختصات جهانی (نسبت به مبدأ بوم، یعنی گوشه‌ی بالا-چپ ناحیه طراحی)
+    float worldPaperW = gridMaxX - canvasBaseX;
+    float worldPaperH = gridMaxY - canvasBaseY;
 
-    // ۱. رسم پس‌زمینه سفید برای ناحیه کاغذ
+    int winW = 0, winH = 0;
+    SDL_GetRenderOutputSize(renderer, &winW, &winH);
+    lastWindowW = winW;
+    lastWindowH = winH;
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    // -----------------------------------------------------------
+    // ۱. پس‌زمینه‌ی کلی پنجره (بیرون از بوم)
+    // -----------------------------------------------------------
+    SDL_SetRenderDrawColor(renderer, 225, 225, 225, 255);
+    SDL_FRect fullArea = { 0, 0, (float)winW, (float)winH };
+    SDL_RenderFillRect(renderer, &fullArea);
+
+    // -----------------------------------------------------------
+    // ۲. فعال کردن Viewport + Scale برای بوم طراحی (اینجا Zoom/Pan اعمال می‌شود)
+    //    هرچه داخل این بلاک رسم شود، در مختصات «جهانی» (World) است.
+    // -----------------------------------------------------------
+    SDL_Rect canvasViewport;
+    canvasViewport.x = (int)(canvasBaseX + panOffsetX);
+    canvasViewport.y = (int)(canvasBaseY + panOffsetY);
+    canvasViewport.w = 8000;
+    canvasViewport.h = 8000;
+    SDL_SetRenderViewport(renderer, &canvasViewport);
+    SDL_SetRenderScale(renderer, zoom, zoom);
+
+    // پس‌زمینه‌ی سفید کاغذ
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_FRect paperRect = { 100, 50, gridMaxX - 100, gridMaxY - 50 };
+    SDL_FRect paperRect = { 0, 0, worldPaperW, worldPaperH };
     SDL_RenderFillRect(renderer, &paperRect);
 
-    // ۲. رسم خطوط شبکه شطرنجی
-    SDL_SetRenderDrawColor(renderer, 225, 225, 225, 255);
-    for(float x = 100; x <= gridMaxX; x += 20) {
-        SDL_RenderLine(renderer, x, 50, x, gridMaxY);
+    // خطوط شبکه (Grid) - رنگ کم‌رنگ و نیمه‌شفاف تا کمک به تراز کند ولی مزاحم دید نباشد
+    SDL_SetRenderDrawColor(renderer, 190, 190, 205, 100);
+    for (float gx = 0; gx <= worldPaperW; gx += gridSpacing) {
+        SDL_RenderLine(renderer, gx, 0, gx, worldPaperH);
     }
-    for(float y = 50; y <= gridMaxY; y += 20) {
-        SDL_RenderLine(renderer, 100, y, gridMaxX, y);
+    for (float gy = 0; gy <= worldPaperH; gy += gridSpacing) {
+        SDL_RenderLine(renderer, 0, gy, worldPaperW, gy);
     }
 
+    // نقاط تاکیدی هر ۵ خط، برای راهنمایی بهتر چشم بدون شلوغ‌کردن صفحه
+    SDL_SetRenderDrawColor(renderer, 140, 140, 160, 150);
+    for (float gx = 0; gx <= worldPaperW; gx += gridSpacing * 5) {
+        for (float gy = 0; gy <= worldPaperH; gy += gridSpacing * 5) {
+            SDL_FRect dot = { gx - 1, gy - 1, 2, 2 };
+            SDL_RenderFillRect(renderer, &dot);
+        }
+    }
+
+    // مرز کاغذ
+    SDL_SetRenderDrawColor(renderer, 120, 120, 120, 255);
+    SDL_RenderRect(renderer, &paperRect);
+
+    // علامت مبدأ مختصات (0,0)
+    DrawOriginMarker(renderer);
+
     // =========================================================
-    // حلقه رسم قطعات
+    // رسم قطعات (بدون تغییر نسبت به قبل، چون در فضای جهانی هستند)
     // =========================================================
     for (auto& comp : components) {
         comp->Update();
         comp->Draw(renderer);
 
-        // تست خطایابی: رسم یک مربع قرمز پشت هر قطعه برای اطمینان
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_FRect debugBox = { comp->x, comp->y, 20, 20 };
         if (comp->isSelected) {
@@ -176,129 +367,116 @@ void EditorPage::Draw(SDL_Renderer* renderer)
             SDL_FRect selRect = { comp->x - 5, comp->y - 5, 50, 50 };
             SDL_RenderFillRect(renderer, &selRect);
             SDL_SetRenderDrawColor(renderer, 0, 50, 255, 255);
-            SDL_RenderRect(renderer, &selRect); // حاشیه آبی تیره
+            SDL_RenderRect(renderer, &selRect);
         }
-
-        // نام تابع در SDL3 اصلاح شد
         SDL_RenderRect(renderer, &debugBox);
     }
-    // رسم مستطیل انتخاب گروهی
-    // رسم مستطیل انتخاب گروهی
-    if (isSelectingBox) {
-        SDL_SetRenderDrawColor(renderer, 0, 150, 255, 50); // آبی خیلی شفاف
 
-        // اضافه کردن (float) قبل از currentMouseX و currentMouseY
-        float rx = std::min(selStartX, (float)currentMouseX);
-        float ry = std::min(selStartY, (float)currentMouseY);
-        float rw = std::abs(selStartX - (float)currentMouseX);
-        float rh = std::abs(selStartY - (float)currentMouseY);
+    // مستطیل انتخاب گروهی (در فضای جهانی)
+    if (isSelectingBox) {
+        SDL_SetRenderDrawColor(renderer, 0, 150, 255, 50);
+
+        float rx = std::min(selStartX, worldMouseX);
+        float ry = std::min(selStartY, worldMouseY);
+        float rw = std::abs(selStartX - worldMouseX);
+        float rh = std::abs(selStartY - worldMouseY);
 
         SDL_FRect selBox = { rx, ry, rw, rh };
         SDL_RenderFillRect(renderer, &selBox);
         SDL_SetRenderDrawColor(renderer, 0, 150, 255, 255);
         SDL_RenderRect(renderer, &selBox);
     }
-    // =========================================================
-    // =========================================================
 
-    // رسم سایه (Ghosting) قطعه هنگام قرار دادن
-    if (isPlacingMode && currentMouseX >= 100 && currentMouseY >= 50) {
-        float snapX = std::round(currentMouseX / 20.0f) * 20.0f;
-        float snapY = std::round(currentMouseY / 20.0f) * 20.0f;
+    // سایه (Ghosting) قطعه هنگام جای‌گذاری - با Snap to Grid در فضای جهانی
+    if (isPlacingMode && worldMouseX >= 0 && worldMouseY >= 0) {
+        float snapX = std::round(worldMouseX / (float)gridSpacing) * gridSpacing;
+        float snapY = std::round(worldMouseY / (float)gridSpacing) * gridSpacing;
 
         SDL_SetRenderDrawColor(renderer, 0, 200, 0, 120);
         SDL_FRect ghostRect = { snapX, snapY, 60, 40 };
         SDL_RenderFillRect(renderer, &ghostRect);
     }
 
+    // -----------------------------------------------------------
+    // ۳. غیرفعال کردن Viewport/Scale؛ از این‌جا به بعد رسم در فضای صفحه (UI ثابت)
+    // -----------------------------------------------------------
+    SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+    SDL_SetRenderViewport(renderer, NULL);
+
     DrawSidebar(renderer);
 
     menu.Draw(renderer);
     search.Draw(renderer);
-    // =======================================================
-    // رسم سایدبار دوم (سمت راست) مخصوص دکمه‌های شبیه‌سازی
-    // =======================================================
+
     SDL_Color black = {0, 0, 0, 255};
-    // پس‌زمینه سایدبار راست
+
     SDL_FRect rightSidebarArea = { gridMaxX - 100, 50, 100, gridMaxY - 50 };
     SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
     SDL_RenderFillRect(renderer, &rightSidebarArea);
 
-    // ۱. دکمه Run (سبز)
-    SDL_SetRenderDrawColor(renderer, 150, 255, 150, 255); // رنگ سبز روشن
+    SDL_SetRenderDrawColor(renderer, 150, 255, 150, 255);
     SDL_FRect runBtn = { gridMaxX - 90, 70, 80, 30 };
     SDL_RenderFillRect(renderer, &runBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // حاشیه مشکی
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderRect(renderer, &runBtn);
 
     SDL_Texture* tRun = TextRenderer::CreateText(renderer, "Run", black);
-    if(tRun) {
+    if (tRun) {
         SDL_FRect p = {gridMaxX - 65, 75, 30, 20};
         SDL_RenderTexture(renderer, tRun, NULL, &p);
         SDL_DestroyTexture(tRun);
     }
 
-    // ۲. دکمه Pause (زرد)
-    SDL_SetRenderDrawColor(renderer, 255, 230, 120, 255); // رنگ زرد روشن
+    SDL_SetRenderDrawColor(renderer, 255, 230, 120, 255);
     SDL_FRect pauseBtn = { gridMaxX - 90, 120, 80, 30 };
     SDL_RenderFillRect(renderer, &pauseBtn);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderRect(renderer, &pauseBtn);
 
     SDL_Texture* tPause = TextRenderer::CreateText(renderer, "Pause", black);
-    if(tPause) {
+    if (tPause) {
         SDL_FRect p = {gridMaxX - 75, 125, 50, 20};
         SDL_RenderTexture(renderer, tPause, NULL, &p);
         SDL_DestroyTexture(tPause);
     }
 
-    // ۳. دکمه Stop (قرمز)
-    SDL_SetRenderDrawColor(renderer, 255, 150, 150, 255); // رنگ قرمز روشن
+    SDL_SetRenderDrawColor(renderer, 255, 150, 150, 255);
     SDL_FRect stopBtn = { gridMaxX - 90, 170, 80, 30 };
     SDL_RenderFillRect(renderer, &stopBtn);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderRect(renderer, &stopBtn);
 
     SDL_Texture* tStop = TextRenderer::CreateText(renderer, "Stop", black);
-    if(tStop) {
+    if (tStop) {
         SDL_FRect p = {gridMaxX - 70, 175, 40, 20};
         SDL_RenderTexture(renderer, tStop, NULL, &p);
         SDL_DestroyTexture(tStop);
     }
-    // =======================================================
-    // =======================================================
-    // رسم دکمه‌های نوار ابزار در بالای صفحه (از چپ به راست)
-    // =======================================================
 
-
-    // ۱. دکمه Rotate (چرخش) - شروع از مختصات امن 450
     SDL_SetRenderDrawColor(renderer, 200, 220, 255, 255);
     SDL_FRect rotBtn = { 450, 10, 60, 30 };
     SDL_RenderFillRect(renderer, &rotBtn);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderRect(renderer, &rotBtn);
     SDL_Texture* tRot = TextRenderer::CreateText(renderer, "Rot 90", black);
-    if(tRot) { SDL_FRect p = {455, 15, 50, 20}; SDL_RenderTexture(renderer, tRot, NULL, &p); SDL_DestroyTexture(tRot); }
+    if (tRot) { SDL_FRect p = {455, 15, 50, 20}; SDL_RenderTexture(renderer, tRot, NULL, &p); SDL_DestroyTexture(tRot); }
 
-    // ۲. دکمه Mirror (قرینه)
     SDL_SetRenderDrawColor(renderer, 255, 220, 200, 255);
     SDL_FRect mirBtn = { 520, 10, 60, 30 };
     SDL_RenderFillRect(renderer, &mirBtn);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderRect(renderer, &mirBtn);
     SDL_Texture* tMir = TextRenderer::CreateText(renderer, "Mirror", black);
-    if(tMir) { SDL_FRect p = {525, 15, 50, 20}; SDL_RenderTexture(renderer, tMir, NULL, &p); SDL_DestroyTexture(tMir); }
+    if (tMir) { SDL_FRect p = {525, 15, 50, 20}; SDL_RenderTexture(renderer, tMir, NULL, &p); SDL_DestroyTexture(tMir); }
 
-    // ۳. دکمه Delete (حذف)
     SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
     SDL_FRect delBtn = { 590, 10, 60, 30 };
     SDL_RenderFillRect(renderer, &delBtn);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderRect(renderer, &delBtn);
     SDL_Texture* tDel = TextRenderer::CreateText(renderer, "Delete", black);
-    if(tDel) { SDL_FRect p = {595, 15, 50, 20}; SDL_RenderTexture(renderer, tDel, NULL, &p); SDL_DestroyTexture(tDel); }
+    if (tDel) { SDL_FRect p = {595, 15, 50, 20}; SDL_RenderTexture(renderer, tDel, NULL, &p); SDL_DestroyTexture(tDel); }
 
-    // ۴. دکمه Undo
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
     SDL_FRect undoBtn = { 660, 10, 70, 30 };
     SDL_RenderFillRect(renderer, &undoBtn);
@@ -307,7 +485,6 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     SDL_Texture* txtUndo = TextRenderer::CreateText(renderer, "< Undo", black);
     if (txtUndo) { SDL_FRect p = {665, 15, 60, 20}; SDL_RenderTexture(renderer, txtUndo, NULL, &p); SDL_DestroyTexture(txtUndo); }
 
-    // ۵. دکمه Redo
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
     SDL_FRect redoBtn = { 740, 10, 70, 30 };
     SDL_RenderFillRect(renderer, &redoBtn);
@@ -316,8 +493,6 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     SDL_Texture* txtRedo = TextRenderer::CreateText(renderer, "Redo >", black);
     if (txtRedo) { SDL_FRect p = {745, 15, 60, 20}; SDL_RenderTexture(renderer, txtRedo, NULL, &p); SDL_DestroyTexture(txtRedo); }
 
-
-    // ۶. دکمه Export Image
     SDL_SetRenderDrawColor(renderer, 200, 255, 200, 255);
     SDL_FRect exportBtn = { 820, 10, 110, 30 };
     SDL_RenderFillRect(renderer, &exportBtn);
@@ -326,73 +501,61 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     SDL_Texture* txtExport = TextRenderer::CreateText(renderer, "Export Image", black);
     if (txtExport) { SDL_FRect p = {825, 15, 100, 20}; SDL_RenderTexture(renderer, txtExport, NULL, &p); SDL_DestroyTexture(txtExport); }
 
-    // =======================================================
-    // این بخش پاک شده بود! (باید حتماً در انتهای Draw باشد)
-    // =======================================================
+    // نوار وضعیت پایین صفحه (مختصات + زوم + دکمه Reset)
+    DrawStatusBar(renderer, winW, winH);
+
     if (exportRequested) {
         ExportToImage(renderer);
-        exportRequested = false; // خاموش کردن پرچم تا صدها عکس پشت سر هم نگیرد
+        exportRequested = false;
     }
-
-} // <--- این آکولاد پایان تابع Draw است
-
+}
 
 //-----------------------------------------
 // Mouse & Keyboard
 //-----------------------------------------
-// =====================================
-// Mouse Actions (Handle Click)
-// =====================================
 EditorMenuAction EditorPage::HandleClick(int x, int y)
 {
+    // دکمه‌ی «بازگشت به ۱۰۰٪» در نوار وضعیت پایین صفحه (فضای صفحه)
+    SDL_FRect resetBtn = { (float)(lastWindowW - 80), (float)(lastWindowH - 24), 70, 22 };
+    if (x >= resetBtn.x && x <= resetBtn.x + resetBtn.w && y >= resetBtn.y && y <= resetBtn.y + resetBtn.h) {
+        ResetView();
+        return (EditorMenuAction)0;
+    }
 
-    // بررسی کلیک روی منوی بالا و سرچ باکس
     EditorMenuAction action = menu.HandleClick(x, y);
     search.HandleClick(x, y);
-    // =======================================================
-    // بررسی کلیک روی نوار ابزار (Toolbar)
-    // =======================================================
 
-    // ۱. کلیک روی چرخش (Rotate)
+    // ---------------- نوار ابزار بالا (فضای صفحه، بدون تغییر) ----------------
     if (x >= 450 && x <= 510 && y >= 10 && y <= 40) {
         SaveCurrentStateForUndo();
         for (auto& c : components) if (c->isSelected) c->angle = (c->angle + 90) % 360;
         return (EditorMenuAction)0;
     }
-
-    // ۲. کلیک روی قرینه (Mirror)
     if (x >= 520 && x <= 580 && y >= 10 && y <= 40) {
         SaveCurrentStateForUndo();
         for (auto& c : components) if (c->isSelected) c->isMirrored = !c->isMirrored;
         return (EditorMenuAction)0;
     }
-
-    // ۳. کلیک روی حذف (Delete)
     if (x >= 590 && x <= 650 && y >= 10 && y <= 40) {
         SaveCurrentStateForUndo();
         components.erase(std::remove_if(components.begin(), components.end(),
             [](const std::unique_ptr<Component>& c) { return c->isSelected; }), components.end());
         return (EditorMenuAction)0;
     }
-
-    // ۴. کلیک روی Undo
     if (x >= 660 && x <= 730 && y >= 10 && y <= 40) {
         Undo();
         return (EditorMenuAction)0;
     }
-
-    // ۵. کلیک روی Redo
     if (x >= 740 && x <= 810 && y >= 10 && y <= 40) {
         Redo();
         return (EditorMenuAction)0;
     }
-
-    // ۶. کلیک روی Export Image
     if (x >= 820 && x <= 930 && y >= 10 && y <= 40) {
         exportRequested = true;
         return (EditorMenuAction)0;
     }
-    // ۱. بررسی کلیک روی نوار ابزار (Sidebar) برای انتخاب قطعه از لیست پویا
+
+    // ---------------- سایدبار چپ (فضای صفحه، بدون تغییر) ----------------
     if (x < 100 && y > 50) {
         int index = (y - 70) / 40;
         if (index >= 0 && index < (int)filteredTools.size()) {
@@ -405,159 +568,163 @@ EditorMenuAction EditorPage::HandleClick(int x, int y)
         return action;
     }
 
-    // ۲. قرار دادن قطعه روی شبکه با کلیک روی صفحه (بخش کامل شده)
-    // =================================================================
-    // بخش جای‌گذاری قطعات روی صفحه (مجهز به سیستم خطایابی)
-    // =================================================================
-    if (isPlacingMode && x >= 100 && y >= 50) {
+    // از این‌جا به بعد تعاملات مربوط به داخل بوم طراحی است؛
+    // مختصات صفحه را به مختصات جهانی تبدیل می‌کنیم تا زوم/پن را در نظر بگیرند
+    float wx, wy;
+    ScreenToWorld(x, y, wx, wy);
 
-        std::cout << "--- Trying to place component! ---" << std::endl;
+    // ---------------- جای‌گذاری قطعه با Snap to Grid ----------------
+    if (isPlacingMode && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
 
-        // محاسبه مختصات برای Snap to Grid
-        float snapX = std::round(x / 20.0f) * 20.0f;
-        float snapY = std::round(y / 20.0f) * 20.0f;
+        float snapX = std::round(wx / (float)gridSpacing) * gridSpacing;
+        float snapY = std::round(wy / (float)gridSpacing) * gridSpacing;
 
-        // ذخیره وضعیت برای Undo
         SaveCurrentStateForUndo();
 
-        bool placed = false; // پرچم بررسی موفقیت
+        bool placed = false;
 
-        // --- منابع اصلی ---
-        if (selectedTool == ComponentType::GND) {
-            components.push_back(std::make_unique<GNDComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::DC_SOURCE) {
-            components.push_back(std::make_unique<DCSourceComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::BATTERY) {
-            components.push_back(std::make_unique<BatteryComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::CLOCK) {
-            components.push_back(std::make_unique<ClockComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::LOGIC_STATE) {
-            components.push_back(std::make_unique<LogicStateComponent>(snapX, snapY)); placed = true;
-        }
-        // --- قطعات غیرفعال ---
-        else if (selectedTool == ComponentType::RESISTOR) {
-            components.push_back(std::make_unique<ResistorComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::CAPACITOR) {
-            components.push_back(std::make_unique<CapacitorComponent>(snapX, snapY)); placed = true;
-        }
-        // --- تعاملی و خروجی ---
-        else if (selectedTool == ComponentType::SWITCH) {
-            components.push_back(std::make_unique<SwitchComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::PUSH_BUTTON) {
-            components.push_back(std::make_unique<PushButtonComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::LED) {
-            components.push_back(std::make_unique<LEDComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::SEVEN_SEGMENT) {
-            components.push_back(std::make_unique<SevenSegmentComponent>(snapX, snapY)); placed = true;
-        }
-        // --- گیت‌های منطقی و فلیپ‌فلاپ ---
-        else if (selectedTool == ComponentType::GATE_AND) {
-            components.push_back(std::make_unique<GateANDComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::GATE_OR) {
-            components.push_back(std::make_unique<GateORComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::GATE_NOT) {
-            components.push_back(std::make_unique<GateNOTComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::GATE_XOR) {
-            components.push_back(std::make_unique<GateXORComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::GATE_NAND) {
-            components.push_back(std::make_unique<GateNANDComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::GATE_NOR) {
-            components.push_back(std::make_unique<GateNORComponent>(snapX, snapY)); placed = true;
-        }
-        else if (selectedTool == ComponentType::FLIP_FLOP_D) {
-            components.push_back(std::make_unique<FlipFlopDComponent>(snapX, snapY)); placed = true;
-        }
+        if (selectedTool == ComponentType::GND) { components.push_back(std::make_unique<GNDComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::DC_SOURCE) { components.push_back(std::make_unique<DCSourceComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::BATTERY) { components.push_back(std::make_unique<BatteryComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::CLOCK) { components.push_back(std::make_unique<ClockComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::LOGIC_STATE) { components.push_back(std::make_unique<LogicStateComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::RESISTOR) { components.push_back(std::make_unique<ResistorComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::CAPACITOR) { components.push_back(std::make_unique<CapacitorComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::SWITCH) { components.push_back(std::make_unique<SwitchComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::PUSH_BUTTON) { components.push_back(std::make_unique<PushButtonComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::LED) { components.push_back(std::make_unique<LEDComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::SEVEN_SEGMENT) { components.push_back(std::make_unique<SevenSegmentComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::GATE_AND) { components.push_back(std::make_unique<GateANDComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::GATE_OR) { components.push_back(std::make_unique<GateORComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::GATE_NOT) { components.push_back(std::make_unique<GateNOTComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::GATE_XOR) { components.push_back(std::make_unique<GateXORComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::GATE_NAND) { components.push_back(std::make_unique<GateNANDComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::GATE_NOR) { components.push_back(std::make_unique<GateNORComponent>(snapX, snapY)); placed = true; }
+        else if (selectedTool == ComponentType::FLIP_FLOP_D) { components.push_back(std::make_unique<FlipFlopDComponent>(snapX, snapY)); placed = true; }
 
-        // گزارش به کنسول که آیا قطعه رسم شد یا خیر
         if (placed) {
             std::cout << "SUCCESS: Component placed at X:" << snapX << " Y:" << snapY << std::endl;
         } else {
             std::cout << "ERROR: selectedTool did not match any component!" << std::endl;
         }
 
-        // خروج از حالت جای‌گذاری پس از قرار دادن قطعه
         isPlacingMode = false;
-
-        // برگرداندن صفر به معنی هیچ دستوری برای منوی اصلی نیست (جلوگیری از ارور کامپایل)
         return (EditorMenuAction)0;
     }
 
-    // ۳. تعامل با کلیدها و قطعاتِ قرار داده شده روی صفحه
+    // ---------------- تعامل با قطعات موجود (کلیک روی کلید/سوییچ و ...) ----------------
     if (!isPlacingMode) {
         for (auto& comp : components) {
-            if (comp->HandleClick((float)x, (float)y)) {
+            if (comp->HandleClick(wx, wy)) {
                 break;
             }
         }
     }
-    // اگر در حالت قرار دادن قطعه جدید نیستیم:
-    if (!isPlacingMode && x >= 100 && y >= 50) {
+
+    // ---------------- انتخاب قطعه / شروع درگ / شروع مستطیل انتخاب گروهی ----------------
+    if (!isPlacingMode && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
         bool clickedOnComponent = false;
 
-        // چک میکنیم آیا روی قطعه‌ای کلیک شده؟ (از آخر به اول تا قطعه رویی انتخاب شود)
         for (auto it = components.rbegin(); it != components.rend(); ++it) {
-            if ((*it)->Contains(x, y)) {
+            if ((*it)->Contains(wx, wy)) {
                 clickedOnComponent = true;
-                if (!(*it)->isSelected) { // اگر از قبل انتخاب نشده بود
-                    for (auto& c : components) c->isSelected = false; // بقیه را از انتخاب در بیار
-                    (*it)->isSelected = true; // این یکی را انتخاب کن
+                if (!(*it)->isSelected) {
+                    for (auto& c : components) c->isSelected = false;
+                    (*it)->isSelected = true;
                 }
                 isDragging = true;
-                lastMouseX = x;
-                lastMouseY = y;
+                lastMouseX = wx;
+                lastMouseY = wy;
                 break;
             }
         }
 
-        // اگر روی فضای خالی کلیک شده بود، مستطیل انتخاب را شروع کن
         if (!clickedOnComponent) {
             for (auto& c : components) c->isSelected = false;
             isSelectingBox = true;
-            selStartX = x;
-            selStartY = y;
+            selStartX = wx;
+            selStartY = wy;
         }
     }
 
     return action;
 }
 
-
-
-void EditorPage::HandleKeyboard(SDL_Event event)
+EditorMenuAction EditorPage::HandleKeyboard(SDL_Event event)
 {
     search.HandleKeyboard(event);
 
-    // انصراف از جای‌گذاری قطعه با دکمه ESC
-    if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
-        isPlacingMode = false;
+    if (event.type == SDL_EVENT_KEY_DOWN) {
+
+        bool ctrlHeld  = (event.key.mod & SDL_KMOD_CTRL)  != 0;
+        bool shiftHeld = (event.key.mod & SDL_KMOD_SHIFT) != 0;
+
+        // ---------------- Ctrl+S : ذخیره‌ی پروژه ----------------
+        // منطق واقعیِ ذخیره‌سازی (نوشتن روی دیسک) در main.cpp انجام می‌شود؛
+        // اینجا فقط همان اکشنی را برمی‌گردانیم که دکمه‌ی Save هم برمی‌گرداند.
+        if (ctrlHeld && event.key.key == SDLK_S) {
+            return EDITOR_SAVE_PROJECT;
+        }
+
+        // ---------------- Ctrl+Z : Undo ----------------
+        if (ctrlHeld && !shiftHeld && event.key.key == SDLK_Z) {
+            Undo();
+            return (EditorMenuAction)0;
+        }
+
+        // ---------------- Ctrl+Y  یا  Ctrl+Shift+Z : Redo ----------------
+        if ((ctrlHeld && event.key.key == SDLK_Y) ||
+            (ctrlHeld && shiftHeld && event.key.key == SDLK_Z)) {
+            Redo();
+            return (EditorMenuAction)0;
+        }
+
+        // ---------------- Delete : حذف قطعات انتخاب‌شده ----------------
+        if (event.key.key == SDLK_DELETE) {
+            bool anySelected = false;
+            for (auto& c : components) {
+                if (c->isSelected) { anySelected = true; break; }
+            }
+            if (anySelected) {
+                SaveCurrentStateForUndo();
+                components.erase(std::remove_if(components.begin(), components.end(),
+                    [](const std::unique_ptr<Component>& c) { return c->isSelected; }), components.end());
+            }
+            return (EditorMenuAction)0;
+        }
+
+        // ---------------- Esc : لغو حالت جای‌گذاری قطعه ----------------
+        if (event.key.key == SDLK_ESCAPE) {
+            isPlacingMode = false;
+            return (EditorMenuAction)0;
+        }
+
+        // ---------------- کلیدهای میان‌بر زوم: + / - و بازگشت به ۱۰۰٪ با 0 ----------------
+        if (event.key.key == SDLK_EQUALS || event.key.key == SDLK_KP_PLUS) {
+            HandleMouseWheel(1.0f, currentMouseX, currentMouseY);
+            return (EditorMenuAction)0;
+        }
+        if (event.key.key == SDLK_MINUS || event.key.key == SDLK_KP_MINUS) {
+            HandleMouseWheel(-1.0f, currentMouseX, currentMouseY);
+            return (EditorMenuAction)0;
+        }
+        if (event.key.key == SDLK_0 || event.key.key == SDLK_KP_0) {
+            ResetView();
+            return (EditorMenuAction)0;
+        }
     }
+
+    return (EditorMenuAction)0;
 }
+
 void EditorPage::ClearWorkspace()
 {
-    // پاک کردن تمام قطعات از روی صفحه
     components.clear();
-
-    // خروج از حالت جای‌گذاری قطعه (اگر دست کاربر ابزاری بوده لغو شود)
     isPlacingMode = false;
 }
+
 //-----------------------------------------
-// Save Workspace (ذخیره قطعات در فایل)
-//-----------------------------------------
-//-----------------------------------------
-// Save Workspace (ذخیره قطعات در فایل)
+// Save / Load Workspace
 //-----------------------------------------
 void EditorPage::SaveWorkspace(const std::string& filepath)
 {
@@ -567,7 +734,6 @@ void EditorPage::SaveWorkspace(const std::string& filepath)
         return;
     }
 
-    // تغییر مهم: حالا زاویه و وضعیت قرینه هم در فایل متنی ذخیره می‌شوند
     for (const auto& comp : components) {
         file << (int)comp->type << " " << comp->x << " " << comp->y << " "
              << comp->angle << " " << comp->isMirrored << "\n";
@@ -577,12 +743,9 @@ void EditorPage::SaveWorkspace(const std::string& filepath)
     std::cout << "Workspace saved successfully to: " << filepath << std::endl;
 }
 
-//-----------------------------------------
-// Load Workspace (خواندن قطعات از فایل)
-//-----------------------------------------
 void EditorPage::LoadWorkspace(const std::string& filepath)
 {
-    ClearWorkspace(); // ابتدا صفحه را پاک کن
+    ClearWorkspace();
 
     std::ifstream file(filepath);
     if (!file.is_open()) {
@@ -594,12 +757,10 @@ void EditorPage::LoadWorkspace(const std::string& filepath)
     float x, y;
     bool isMirrored;
 
-    // تغییر مهم: خواندن زاویه و قرینه علاوه بر مختصات
     while (file >> typeInt >> x >> y >> angle >> isMirrored)
     {
         ComponentType type = (ComponentType)typeInt;
 
-        // بر اساس نوع قطعه خوانده شده، آن را می‌سازیم و در صفحه قرار می‌دهیم
         if (type == ComponentType::GND) components.push_back(std::make_unique<GNDComponent>(x, y));
         else if (type == ComponentType::DC_SOURCE) components.push_back(std::make_unique<DCSourceComponent>(x, y));
         else if (type == ComponentType::BATTERY) components.push_back(std::make_unique<BatteryComponent>(x, y));
@@ -619,7 +780,6 @@ void EditorPage::LoadWorkspace(const std::string& filepath)
         else if (type == ComponentType::GATE_XOR) components.push_back(std::make_unique<GateXORComponent>(x, y));
         else if (type == ComponentType::FLIP_FLOP_D) components.push_back(std::make_unique<FlipFlopDComponent>(x, y));
 
-        // اعمال زاویه و قرینه به قطعه‌ای که همین الان ساخته شد
         if (!components.empty()) {
             components.back()->angle = angle;
             components.back()->isMirrored = isMirrored;
@@ -629,18 +789,13 @@ void EditorPage::LoadWorkspace(const std::string& filepath)
     file.close();
     std::cout << "Workspace loaded successfully from: " << filepath << std::endl;
 }
-// ========================================================
-// منطق Undo و Redo
-// ========================================================
 
-// ========================================================
-// منطق Undo و Redo
-// ========================================================
-
+//-----------------------------------------
+// Undo / Redo
+//-----------------------------------------
 std::string EditorPage::SaveStateToString()
 {
     std::stringstream ss;
-    // تغییر مهم: زاویه و قرینه به استرینگِ رم (حافظه موقت) هم اضافه شدند
     for (const auto& comp : components) {
         ss << (int)comp->type << " " << comp->x << " " << comp->y << " "
            << comp->angle << " " << comp->isMirrored << "\n";
@@ -650,14 +805,13 @@ std::string EditorPage::SaveStateToString()
 
 void EditorPage::LoadStateFromString(const std::string& state)
 {
-    ClearWorkspace(); // پاک کردن صفحه فعلی
+    ClearWorkspace();
     std::stringstream ss(state);
 
     int typeInt, angle;
     float x, y;
     bool isMirrored;
 
-    // خواندن قطعات و زوایا از روی متن موجود در رم
     while (ss >> typeInt >> x >> y >> angle >> isMirrored)
     {
         ComponentType type = (ComponentType)typeInt;
@@ -681,7 +835,6 @@ void EditorPage::LoadStateFromString(const std::string& state)
         else if (type == ComponentType::GATE_XOR) components.push_back(std::make_unique<GateXORComponent>(x, y));
         else if (type == ComponentType::FLIP_FLOP_D) components.push_back(std::make_unique<FlipFlopDComponent>(x, y));
 
-        // اعمال زاویه و قرینه به قطعه
         if (!components.empty()) {
             components.back()->angle = angle;
             components.back()->isMirrored = isMirrored;
@@ -691,26 +844,20 @@ void EditorPage::LoadStateFromString(const std::string& state)
 
 void EditorPage::SaveCurrentStateForUndo()
 {
-    // اگر از 10 تا بیشتر شد، قدیمی‌ترین را پاک کن
     if (undoStack.size() >= 10) {
         undoStack.erase(undoStack.begin());
     }
 
-    // وضعیت فعلی را به لیست Undo اضافه کن
     undoStack.push_back(SaveStateToString());
-
-    // وقتی کار جدیدی انجام می‌شود، لیست Redo باید خالی شود
     redoStack.clear();
 }
 
 void EditorPage::Undo()
 {
-    if (undoStack.empty()) return; // اگر چیزی برای برگشت نیست خارج شو
+    if (undoStack.empty()) return;
 
-    // وضعیت فعلی را برای Redo ذخیره کن
     redoStack.push_back(SaveStateToString());
 
-    // وضعیت قبلی را بخوان و اعمال کن
     std::string prevState = undoStack.back();
     undoStack.pop_back();
     LoadStateFromString(prevState);
@@ -720,28 +867,25 @@ void EditorPage::Undo()
 
 void EditorPage::Redo()
 {
-    if (redoStack.empty()) return; // اگر چیزی برای جلو رفتن نیست خارج شو
+    if (redoStack.empty()) return;
 
-    // وضعیت فعلی را برای Undo ذخیره کن
     undoStack.push_back(SaveStateToString());
 
-    // وضعیت بعدی را بخوان و اعمال کن
     std::string nextState = redoStack.back();
     redoStack.pop_back();
     LoadStateFromString(nextState);
 
     std::cout << "Redo Performed!" << std::endl;
 }
-// ========================================================
-// خروجی تصویر از مدار (با استفاده از تابع بومی SDL_SavePNG)
-// ========================================================
+
+//-----------------------------------------
+// Export
+//-----------------------------------------
 void EditorPage::ExportToImage(SDL_Renderer* renderer)
 {
-    // خواندن تمام پیکسل‌های رندر شده روی صفحه
     SDL_Surface* surface = SDL_RenderReadPixels(renderer, NULL);
 
     if (surface) {
-        // استفاده از تابع داخلی و جدید SDL3 برای ذخیره PNG (بدون نیاز به DLL اضافه)
         bool result = SDL_SavePNG(surface, "Circuit_Output.png");
 
         if (result == true) {
@@ -757,29 +901,49 @@ void EditorPage::ExportToImage(SDL_Renderer* renderer)
         std::cout << "Export Failed (Could not read pixels): " << SDL_GetError() << std::endl;
     }
 }
+
+//-----------------------------------------
+// Mouse Move / Release
+//-----------------------------------------
 void EditorPage::HandleMouseMove(int x, int y) {
-    currentMouseX = x; currentMouseY = y;
+    currentMouseX = x;
+    currentMouseY = y;
+
+    float wx, wy;
+    ScreenToWorld(x, y, wx, wy);
+    worldMouseX = wx;
+    worldMouseY = wy;
+
+    if (isPanning) {
+        UpdatePan(x, y);
+        return;
+    }
 
     if (isDragging) {
-        float dx = x - lastMouseX;
-        float dy = y - lastMouseY;
+        float dx = wx - lastMouseX;
+        float dy = wy - lastMouseY;
         for (auto& c : components) {
             if (c->isSelected) {
                 c->x += dx;
                 c->y += dy;
             }
         }
-        lastMouseX = x; lastMouseY = y;
+        lastMouseX = wx;
+        lastMouseY = wy;
     }
 }
 
 void EditorPage::HandleMouseRelease(int x, int y) {
+    if (isPanning) {
+        StopPan();
+    }
+
     if (isDragging) {
         SaveCurrentStateForUndo();
         for (auto& c : components) {
             if (c->isSelected) {
-                c->x = std::round(c->x / 20.0f) * 20.0f;
-                c->y = std::round(c->y / 20.0f) * 20.0f;
+                c->x = std::round(c->x / (float)gridSpacing) * gridSpacing;
+                c->y = std::round(c->y / (float)gridSpacing) * gridSpacing;
             }
         }
         isDragging = false;
@@ -788,11 +952,10 @@ void EditorPage::HandleMouseRelease(int x, int y) {
     if (isSelectingBox) {
         isSelectingBox = false;
 
-        // اینجا هم (float) را قبل از currentMouseX و currentMouseY اضافه کنید:
-        float rx = std::min(selStartX, (float)currentMouseX);
-        float ry = std::min(selStartY, (float)currentMouseY);
-        float rw = std::abs(selStartX - (float)currentMouseX);
-        float rh = std::abs(selStartY - (float)currentMouseY);
+        float rx = std::min(selStartX, worldMouseX);
+        float ry = std::min(selStartY, worldMouseY);
+        float rw = std::abs(selStartX - worldMouseX);
+        float rh = std::abs(selStartY - worldMouseY);
 
         for (auto& c : components) {
             if (c->x >= rx && c->x <= rx + rw && c->y >= ry && c->y <= ry + rh) {
@@ -800,5 +963,4 @@ void EditorPage::HandleMouseRelease(int x, int y) {
             }
         }
     }
-
 }

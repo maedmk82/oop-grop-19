@@ -9,6 +9,9 @@
 #include <memory>
 #include <sstream>
 #include <istream>
+#include <functional>
+#include <unordered_map>
+#include <unordered_set>
 #include "Component.h"
 
 struct WirePoint {
@@ -36,6 +39,24 @@ struct Wire {
 struct JunctionDot {
     float x = 0.0f;
     float y = 0.0f;
+
+    // Runtime-only bookkeeping. Never serialized as ownership/reference data.
+    // It is rebuilt from the live Wire container after every topology change.
+    std::vector<int> connectedWireIds;
+};
+
+struct ElectricalPinRef {
+    int componentId = -1;
+    int pinIndex = -1;
+
+    bool operator==(const ElectricalPinRef& other) const {
+        return componentId == other.componentId && pinIndex == other.pinIndex;
+    }
+};
+
+struct ElectricalNet {
+    int id = -1;
+    std::vector<ElectricalPinRef> pins;
 };
 
 class WireSystem {
@@ -50,6 +71,11 @@ public:
     bool isDrawing = false;
     Wire activeWire;
     WirePoint previewPoint;
+
+    // Optional bridge to the simulator/netlist layer. The editor itself does
+    // not own the simulator, so the callback is intentionally type-erased at
+    // the WireSystem boundary. It is invoked after every topology mutation.
+    std::function<void(const std::vector<ElectricalNet>&)> onElectricalTopologyChanged;
 
     void Clear() {
         wires.clear();
@@ -189,73 +215,6 @@ public:
         return outWireIndex >= 0;
     }
 
-    // Build a deterministic Manhattan route:
-    // start -> (end.x, start.y) -> end.
-    // No diagonal segment is ever produced.
-    static void BuildOrthogonalRoute(std::vector<WirePoint>& points,
-                                     WirePoint start,
-                                     WirePoint end,
-                                     int gridSpacing = 0) {
-        if (gridSpacing > 0) {
-            start = SnapPoint(start.x, start.y, gridSpacing);
-            end   = SnapPoint(end.x, end.y, gridSpacing);
-        }
-
-        points.clear();
-        points.push_back(start);
-
-        const float eps = 0.001f;
-
-        if (std::fabs(start.x - end.x) <= eps &&
-            std::fabs(start.y - end.y) <= eps) {
-            points.push_back(end);
-            return;
-        }
-
-        if (std::fabs(start.x - end.x) <= eps ||
-            std::fabs(start.y - end.y) <= eps) {
-            points.push_back(end);
-            return;
-        }
-
-        // Default policy: horizontal first, then vertical.
-        points.push_back({ end.x, start.y });
-        points.push_back(end);
-    }
-
-    // Rebuild connected wire geometry after component movement.
-    // Connected endpoints come from the current pin locations; free endpoints
-    // retain their current positions.
-    void UpdateConnectedWireRoutes(
-        const std::vector<std::unique_ptr<Component>>& components,
-        int gridSpacing = 0) {
-
-        for (auto& wire : wires) {
-            if (wire.points.empty()) continue;
-
-            WirePoint start = wire.points.front();
-            WirePoint end   = wire.points.back();
-
-            float x = 0.0f;
-            float y = 0.0f;
-
-            if (GetEndpointPosition(wire.start, components, x, y)) {
-                start = { x, y };
-            }
-
-            if (GetEndpointPosition(wire.end, components, x, y)) {
-                end = { x, y };
-            }
-
-            // Do not snap connected pin coordinates: preserve the exact
-            // position reported by Component::GetPinWorldPos().
-            BuildOrthogonalRoute(wire.points, start, end);
-        }
-
-        RebuildJunctions(components);
-        (void)gridSpacing;
-    }
-
     static void AddOrthogonalPoint(std::vector<WirePoint>& points,
                                    WirePoint target,
                                    int gridSpacing) {
@@ -346,7 +305,7 @@ public:
         const auto pos = component->GetPinWorldPos(component->pins[pinIndex]);
         WirePoint endPoint = { pos.first, pos.second };
 
-        BuildOrthogonalRoute(activeWire.points, activeWire.points.front(), endPoint, gridSpacing);
+        AddOrthogonalPoint(activeWire.points, endPoint, gridSpacing);
 
         if (activeWire.points.size() < 2) {
             Cancel();
@@ -369,7 +328,7 @@ public:
         if (!isDrawing) return false;
 
         WirePoint endPoint = SnapPoint(x, y, gridSpacing);
-        BuildOrthogonalRoute(activeWire.points, activeWire.points.front(), endPoint, gridSpacing);
+        AddOrthogonalPoint(activeWire.points, endPoint, gridSpacing);
 
         if (activeWire.points.size() < 2) {
             Cancel();
@@ -418,71 +377,289 @@ public:
         return false;
     }
 
-    void RebuildJunctions(const std::vector<std::unique_ptr<Component>>& components) {
-        // Explicit junctions are intentionally preserved only while they
-        // still lie on at least one existing wire. Crossing wires remain
-        // electrically separate unless the user explicitly creates a dot.
-        std::vector<JunctionDot> preserved = junctions;
-        junctions.clear();
+    std::vector<int> GetConnectedWireIdsAt(float x, float y) const {
+        std::vector<int> result;
+        auto appendUnique = [&result](int id) {
+            if (std::find(result.begin(), result.end(), id) == result.end()) {
+                result.push_back(id);
+            }
+        };
 
-        for (const auto& j : preserved) {
-            bool onWire = false;
+        for (const auto& wire : wires) {
+            if (wire.points.size() < 2) continue;
+
+            bool connected = false;
+            for (size_t i = 1; i < wire.points.size(); ++i) {
+                if (DistancePointToSegment(
+                        x, y,
+                        wire.points[i - 1].x, wire.points[i - 1].y,
+                        wire.points[i].x, wire.points[i].y) <= JUNCTION_RADIUS + 0.5f) {
+                    connected = true;
+                    break;
+                }
+            }
+            if (connected) appendUnique(wire.id);
+        }
+        return result;
+    }
+
+    static bool SamePin(const ElectricalPinRef& a, const ElectricalPinRef& b) {
+        return a.componentId == b.componentId && a.pinIndex == b.pinIndex;
+    }
+
+    std::vector<ElectricalNet> BuildElectricalNets(
+        const std::vector<std::unique_ptr<Component>>& components) const {
+        struct PinKey {
+            int componentId;
+            int pinIndex;
+            bool operator==(const PinKey& o) const {
+                return componentId == o.componentId && pinIndex == o.pinIndex;
+            }
+        };
+        struct PinKeyHash {
+            size_t operator()(const PinKey& k) const {
+                return (static_cast<size_t>(static_cast<unsigned int>(k.componentId)) << 32) ^
+                       static_cast<size_t>(static_cast<unsigned int>(k.pinIndex));
+            }
+        };
+
+        std::vector<ElectricalPinRef> allPins;
+        for (const auto& c : components) {
+            if (!c) continue;
+            for (int i = 0; i < static_cast<int>(c->pins.size()); ++i) {
+                allPins.push_back({c->id, i});
+            }
+        }
+
+        std::unordered_map<PinKey, int, PinKeyHash> pinNode;
+        for (int i = 0; i < static_cast<int>(allPins.size()); ++i) {
+            pinNode[{allPins[i].componentId, allPins[i].pinIndex}] = i;
+        }
+
+        std::vector<std::vector<int>> graph(allPins.size());
+        auto link = [&graph](int a, int b) {
+            if (a < 0 || b < 0 || a >= static_cast<int>(graph.size()) || b >= static_cast<int>(graph.size()) || a == b) return;
+            graph[a].push_back(b);
+            graph[b].push_back(a);
+        };
+
+        auto endpointNode = [&pinNode](const WireEndpoint& ep) -> int {
+            if (!ep.isConnected()) return -1;
+            auto it = pinNode.find({ep.componentId, ep.pinIndex});
+            return it == pinNode.end() ? -1 : it->second;
+        };
+
+        // A wire directly links its two electrical endpoints when both exist.
+        // Free-end wires participate in junction topology below.
+        for (const auto& wire : wires) {
+            const int a = endpointNode(wire.start);
+            const int b = endpointNode(wire.end);
+            if (a >= 0 && b >= 0) link(a, b);
+        }
+
+        // A junction links every valid wire endpoint touching the junction.
+        for (const auto& junction : junctions) {
+            std::vector<int> junctionPins;
             for (const auto& wire : wires) {
+                bool touches = false;
                 for (size_t i = 1; i < wire.points.size(); ++i) {
-                    if (DistancePointToSegment(j.x, j.y,
-                                               wire.points[i - 1].x, wire.points[i - 1].y,
-                                               wire.points[i].x, wire.points[i].y) <= JUNCTION_RADIUS + 0.5f) {
-                        onWire = true;
+                    if (DistancePointToSegment(
+                            junction.x, junction.y,
+                            wire.points[i - 1].x, wire.points[i - 1].y,
+                            wire.points[i].x, wire.points[i].y) <= JUNCTION_RADIUS + 0.5f) {
+                        touches = true;
                         break;
                     }
                 }
-                if (onWire) break;
+                if (!touches) continue;
+
+                const int a = endpointNode(wire.start);
+                const int b = endpointNode(wire.end);
+                if (a >= 0) junctionPins.push_back(a);
+                if (b >= 0) junctionPins.push_back(b);
             }
-            if (onWire) AddJunction(j.x, j.y);
+
+            std::sort(junctionPins.begin(), junctionPins.end());
+            junctionPins.erase(std::unique(junctionPins.begin(), junctionPins.end()), junctionPins.end());
+            for (size_t i = 1; i < junctionPins.size(); ++i) {
+                link(junctionPins[0], junctionPins[i]);
+            }
         }
 
-        // If two different wires terminate at exactly the same free point,
-        // show a junction dot. Pin-to-pin connections do not need a dot.
+        std::vector<ElectricalNet> nets;
+        std::vector<char> visited(allPins.size(), 0);
+        int nextNetId = 1;
+
+        for (int root = 0; root < static_cast<int>(allPins.size()); ++root) {
+            if (visited[root]) continue;
+
+            ElectricalNet net;
+            net.id = nextNetId++;
+
+            std::vector<int> stack{root};
+            visited[root] = 1;
+            while (!stack.empty()) {
+                int n = stack.back();
+                stack.pop_back();
+                net.pins.push_back(allPins[n]);
+
+                for (int next : graph[n]) {
+                    if (!visited[next]) {
+                        visited[next] = 1;
+                        stack.push_back(next);
+                    }
+                }
+            }
+
+            nets.push_back(std::move(net));
+        }
+
+        return nets;
+    }
+
+    void NotifyElectricalTopologyChanged(
+        const std::vector<std::unique_ptr<Component>>& components) {
+        if (onElectricalTopologyChanged) {
+            onElectricalTopologyChanged(BuildElectricalNets(components));
+        }
+    }
+
+    void RebuildJunctions(const std::vector<std::unique_ptr<Component>>& components) {
+        // Preserve only the coordinates of old explicit junctions. Their wire
+        // references are deliberately discarded and rebuilt from live wires.
+        std::vector<WirePoint> oldCoordinates;
+        oldCoordinates.reserve(junctions.size());
+        for (const auto& j : junctions) oldCoordinates.push_back({j.x, j.y});
+
+        junctions.clear();
+
+        // Restore explicit junctions only when at least two LIVE wires still
+        // touch the same location. A junction with 0 or 1 valid wire is removed.
+        for (const auto& point : oldCoordinates) {
+            const std::vector<int> ids = GetConnectedWireIdsAt(point.x, point.y);
+            if (ids.size() >= 2) {
+                JunctionDot fresh;
+                fresh.x = point.x;
+                fresh.y = point.y;
+                fresh.connectedWireIds = ids;
+                junctions.push_back(std::move(fresh));
+            }
+        }
+
+        // Automatically create a junction at shared free wire endpoints.
         for (size_t i = 0; i < wires.size(); ++i) {
             for (size_t j = i + 1; j < wires.size(); ++j) {
                 const auto& a = wires[i];
                 const auto& b = wires[j];
                 if (a.points.empty() || b.points.empty()) continue;
 
-                const WirePoint aStart = a.points.front();
-                const WirePoint aEnd = a.points.back();
-                const WirePoint bStart = b.points.front();
-                const WirePoint bEnd = b.points.back();
+                const WirePoint aPts[] = {a.points.front(), a.points.back()};
+                const WirePoint bPts[] = {b.points.front(), b.points.back()};
 
-                const WirePoint candidatesA[] = { aStart, aEnd };
-                const WirePoint candidatesB[] = { bStart, bEnd };
+                for (const auto& pa : aPts) {
+                    for (const auto& pb : bPts) {
+                        if (DistanceSquared(pa.x, pa.y, pb.x, pb.y) > 0.01f) continue;
 
-                for (const auto& pa : candidatesA) {
-                    for (const auto& pb : candidatesB) {
-                        if (DistanceSquared(pa.x, pa.y, pb.x, pb.y) <= 0.01f) {
-                            const bool aPin =
-                                (pa.x == aStart.x && pa.y == aStart.y && a.start.isConnected()) ||
-                                (pa.x == aEnd.x && pa.y == aEnd.y && a.end.isConnected());
-                            const bool bPin =
-                                (pb.x == bStart.x && pb.y == bStart.y && b.start.isConnected()) ||
-                                (pb.x == bEnd.x && pb.y == bEnd.y && b.end.isConnected());
+                        const bool aPin =
+                            ((pa.x == a.points.front().x && pa.y == a.points.front().y) && a.start.isConnected()) ||
+                            ((pa.x == a.points.back().x  && pa.y == a.points.back().y ) && a.end.isConnected());
+                        const bool bPin =
+                            ((pb.x == b.points.front().x && pb.y == b.points.front().y) && b.start.isConnected()) ||
+                            ((pb.x == b.points.back().x  && pb.y == b.points.back().y ) && b.end.isConnected());
 
-                            if (!(aPin && bPin)) AddJunction(pa.x, pa.y);
-                        }
+                        if (!(aPin && bPin)) AddJunction(pa.x, pa.y);
                     }
                 }
             }
         }
 
-        (void)components;
+        // Authoritative final cleanup: every surviving Junction must reference
+        // at least two CURRENT wires, and only those CURRENT wire IDs.
+        for (auto it = junctions.begin(); it != junctions.end();) {
+            it->connectedWireIds = GetConnectedWireIdsAt(it->x, it->y);
+            if (it->connectedWireIds.size() < 2) {
+                it = junctions.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        // Topology is now authoritative for the simulator as well.
+        NotifyElectricalTopologyChanged(components);
     }
 
+    void RemoveWireByIndex(
+        int wireIndex,
+        const std::vector<std::unique_ptr<Component>>& components) {
+        if (wireIndex < 0 || wireIndex >= static_cast<int>(wires.size())) return;
+
+        // Snapshot the removed ID before erase. No Junction retains this ID
+        // after the mandatory rebuild below.
+        const int removedWireId = wires[wireIndex].id;
+        (void)removedWireId;
+        wires.erase(wires.begin() + wireIndex);
+        RebuildJunctions(components);
+    }
+
+    void DeleteSelected(const std::vector<std::unique_ptr<Component>>& components) {
+        bool removedAny = false;
+        wires.erase(
+            std::remove_if(wires.begin(), wires.end(),
+                [&removedAny](const Wire& w) {
+                    if (w.isSelected) {
+                        removedAny = true;
+                        return true;
+                    }
+                    return false;
+                }),
+            wires.end()
+        );
+
+        if (removedAny) RebuildJunctions(components);
+    }
+
+    // Compatibility overload. Use the components overload whenever available.
     void DeleteSelected() {
+        std::vector<int> removedWireIds;
+        for (const auto& wire : wires) {
+            if (wire.isSelected) removedWireIds.push_back(wire.id);
+        }
         wires.erase(
             std::remove_if(wires.begin(), wires.end(),
                 [](const Wire& w) { return w.isSelected; }),
             wires.end()
         );
+
+        std::vector<JunctionDot> rebuilt;
+        for (const auto& old : junctions) {
+            const auto ids = GetConnectedWireIdsAt(old.x, old.y);
+            if (ids.size() >= 2) {
+                JunctionDot fresh{old.x, old.y, ids};
+                rebuilt.push_back(std::move(fresh));
+            }
+        }
+        junctions = std::move(rebuilt);
+        (void)removedWireIds;
+    }
+
+    void DeleteWiresConnectedToComponent(
+        int componentId,
+        const std::vector<std::unique_ptr<Component>>& components) {
+        bool removedAny = false;
+        wires.erase(
+            std::remove_if(wires.begin(), wires.end(),
+                [componentId, &removedAny](const Wire& w) {
+                    if (w.start.componentId == componentId ||
+                        w.end.componentId == componentId) {
+                        removedAny = true;
+                        return true;
+                    }
+                    return false;
+                }),
+            wires.end()
+        );
+
+        if (removedAny) RebuildJunctions(components);
     }
 
     void DeleteWiresConnectedToComponent(int componentId) {
@@ -494,6 +671,12 @@ public:
                 }),
             wires.end()
         );
+
+        for (auto it = junctions.begin(); it != junctions.end();) {
+            it->connectedWireIds = GetConnectedWireIdsAt(it->x, it->y);
+            if (it->connectedWireIds.size() < 2) it = junctions.erase(it);
+            else ++it;
+        }
     }
 
     void Draw(SDL_Renderer* renderer,

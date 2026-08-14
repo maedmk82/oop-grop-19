@@ -707,7 +707,7 @@ void EditorPage::DrawInspectorPanel(SDL_Renderer* renderer, int windowW, int win
         SDL_FRect box={x+12,cy+20,RIGHT_INSPECTOR_WIDTH-24,28}; SDL_RenderFillRect(renderer,&box);
         SDL_SetRenderDrawColor(renderer,185,185,185,255); SDL_RenderRect(renderer,&box);
         SDL_Texture* v=TextRenderer::CreateText(renderer,f.value.c_str(),black);
-        if(v){float tw=0,th=0;SDL_GetTextureSize(v,&tw,&th); SDL_FRect p={box.x+6,box.y+4,box.w-12,th}; SDL_RenderTexture(renderer,v,NULL,&p); SDL_DestroyTexture(v);}        
+        if(v){float tw=0,th=0;SDL_GetTextureSize(v,&tw,&th); SDL_FRect p={box.x+6,box.y+4,box.w-12,th}; SDL_RenderTexture(renderer,v,NULL,&p); SDL_DestroyTexture(v);}
         cy += 56;
         if (cy > y+h-80) break;
     }
@@ -741,17 +741,20 @@ void EditorPage::Draw(SDL_Renderer* renderer)
 
     bool isA3 = (pageSize.find("A3") != std::string::npos);
 
-    float gridMaxX = isA3 ? 1350.0f : 1050.0f;
-    float gridMaxY = isA3 ? 800.0f : 650.0f;
-
-    // اندازه‌ی کاغذ در مختصات جهانی (نسبت به مبدأ بوم، یعنی گوشه‌ی بالا-چپ ناحیه طراحی)
-    float worldPaperW = gridMaxX - canvasBaseX;
-    float worldPaperH = gridMaxY - canvasBaseY;
-
+    // ابعاد منطقی کاغذ را از ابعاد پنجره جدا نگه می‌داریم تا
+    // با بزرگ شدن پنجره، Canvas واقعاً فضای بیشتری برای کار داشته باشد.
     int winW = 0, winH = 0;
     SDL_GetRenderOutputSize(renderer, &winW, &winH);
     lastWindowW = winW;
     lastWindowH = winH;
+
+    // A3 کاغذ بزرگ‌تری دارد؛ A4 کمی کوچک‌تر است اما همچنان
+    // برای پروژه‌های معمول فضای مناسبی در اختیار می‌گذارد.
+    const float paperW = isA3 ? 1600.0f : 1200.0f;
+    const float paperH = isA3 ? 1050.0f : 820.0f;
+
+    const float worldPaperW = paperW;
+    const float worldPaperH = paperH;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
@@ -874,25 +877,62 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     menu.Draw(renderer);
     search.Draw(renderer);
 
-    // --- Compact editor actions on the top toolbar ---
+    // --- نوار ابزار Responsive ---
+    // با توجه به عرض پنجره، دکمه‌ها بین Search و Inspector جا می‌گیرند.
+    const float inspectorLeft = (float)winW - RIGHT_INSPECTOR_WIDTH;
+    const float toolbarRight = inspectorLeft - 8.0f;
+    float toolbarX = 392.0f;
+    float gap = 4.0f;
+
+    struct ToolbarButtonSpec {
+        const char* text;
+        float baseWidth;
+        SDL_Color fill;
+    };
+
+    const ToolbarButtonSpec specs[] = {
+        {"Wire", 50.0f, {190,235,200,255}},
+        {"Rot", 48.0f, {210,220,245,255}},
+        {"Mirror", 58.0f, {245,225,205,255}},
+        {"Delete", 56.0f, {250,190,190,255}},
+        {"Undo", 48.0f, {225,225,225,255}},
+        {"Redo", 48.0f, {225,225,225,255}},
+        {"Save", 52.0f, {205,235,215,255}},
+        {"Export", 60.0f, {205,235,215,255}},
+        {"Run", 48.0f, {180,245,180,255}},
+        {"Pause", 56.0f, {255,230,120,255}},
+        {"Stop", 50.0f, {245,190,190,255}}
+    };
+
+    float totalBase = 0.0f;
+    for (const auto& b : specs) totalBase += b.baseWidth;
+    totalBase += gap * 10.0f;
+    const float available = std::max(0.0f, toolbarRight - toolbarX);
+    const float scale = totalBase > available && available > 0.0f ? available / totalBase : 1.0f;
+
     auto drawTopButton = [&](float x, float w, const char* text, SDL_Color fill) {
         SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
         SDL_FRect r={x,7,w,30}; SDL_RenderFillRect(renderer,&r);
         SDL_SetRenderDrawColor(renderer,120,120,120,255); SDL_RenderRect(renderer,&r);
         SDL_Texture* t=TextRenderer::CreateText(renderer,text,{20,20,20,255});
-        if(t){float tw=0,th=0;SDL_GetTextureSize(t,&tw,&th); SDL_FRect p={x+(w-tw)/2,12,tw,th}; SDL_RenderTexture(renderer,t,NULL,&p); SDL_DestroyTexture(t);}
+        if(t){
+            float tw=0,th=0; SDL_GetTextureSize(t,&tw,&th);
+            const float maxTextW = std::max(8.0f, w - 6.0f);
+            if (tw > maxTextW) tw = maxTextW;
+            SDL_FRect p={x+(w-tw)/2,12,tw,th};
+            SDL_RenderTexture(renderer,t,NULL,&p);
+            SDL_DestroyTexture(t);
+        }
     };
-    drawTopButton(385,48,"Wire",{190,235,200,255});
-    drawTopButton(437,46,"Rot",{210,220,245,255});
-    drawTopButton(487,54,"Mirror",{245,225,205,255});
-    drawTopButton(545,54,"Delete",{250,190,190,255});
-    drawTopButton(603,46,"Undo",{225,225,225,255});
-    drawTopButton(653,46,"Redo",{225,225,225,255});
-    drawTopButton(703,50,"Save",{205,235,215,255});
-    drawTopButton(757,58,"Export",{205,235,215,255});
-    drawTopButton(819,46,"Run",{180,245,180,255});
-    drawTopButton(869,54,"Pause",{255,230,140,255});
-    drawTopButton(927,46,"Stop",{245,190,190,255});
+
+    float buttonX[11] = {};
+    float buttonW[11] = {};
+    for (int i = 0; i < 11; ++i) {
+        buttonX[i] = toolbarX;
+        buttonW[i] = specs[i].baseWidth * scale;
+        drawTopButton(buttonX[i], buttonW[i], specs[i].text, specs[i].fill);
+        toolbarX += buttonW[i] + gap * scale;
+    }
 
     SDL_Color black = {0, 0, 0, 255};
 
@@ -934,34 +974,57 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
     EditorMenuAction action = menu.HandleClick(x, y);
     search.HandleClick(x, y);
 
-    // ---------------- Top toolbar ----------------
-    if (x >= 385 && x <= 433 && y >= 7 && y <= 37) {
-        SetWireMode(!isWireMode); return (EditorMenuAction)0;
+    // ---------------- Top toolbar (Responsive) ----------------
+    const float inspectorLeft = (float)lastWindowW - RIGHT_INSPECTOR_WIDTH;
+    const float toolbarRight = inspectorLeft - 8.0f;
+    float toolbarX = 392.0f;
+    const float gap = 4.0f;
+
+    struct ToolbarHit { const char* text; float baseWidth; };
+    const ToolbarHit hits[] = {
+        {"Wire",50.0f},{"Rot",48.0f},{"Mirror",58.0f},{"Delete",56.0f},{"Undo",48.0f},{"Redo",48.0f},
+        {"Save",52.0f},{"Export",60.0f},{"Run",48.0f},{"Pause",56.0f},{"Stop",50.0f}
+    };
+    float totalBase = 0.0f;
+    for (const auto& b : hits) totalBase += b.baseWidth;
+    totalBase += gap * 10.0f;
+    const float available = std::max(0.0f, toolbarRight - toolbarX);
+    const float scale = totalBase > available && available > 0.0f ? available / totalBase : 1.0f;
+
+    float hitX[11] = {};
+    float hitW[11] = {};
+    for (int i = 0; i < 11; ++i) {
+        hitX[i] = toolbarX;
+        hitW[i] = hits[i].baseWidth * scale;
+        if (x >= hitX[i] && x <= hitX[i] + hitW[i] && y >= 7 && y <= 37) {
+            switch (i) {
+                case 0: SetWireMode(!isWireMode); return (EditorMenuAction)0;
+                case 1:
+                    SaveCurrentStateForUndo();
+                    for (auto& c : components) if (c->isSelected) c->angle = (c->angle + 90) % 360;
+                    return (EditorMenuAction)0;
+                case 2:
+                    SaveCurrentStateForUndo();
+                    for (auto& c : components) if (c->isSelected) c->isMirrored = !c->isMirrored;
+                    return (EditorMenuAction)0;
+                case 3: {
+                    bool hasSelection = false;
+                    for (const auto& c : components) if (c->isSelected) { hasSelection = true; break; }
+                    for (const auto& w : wireSystem.wires) if (w.isSelected) { hasSelection = true; break; }
+                    if (hasSelection) { SaveCurrentStateForUndo(); DeleteSelectedItems(); }
+                    return (EditorMenuAction)0;
+                }
+                case 4: Undo(); return (EditorMenuAction)0;
+                case 5: Redo(); return (EditorMenuAction)0;
+                case 6: return EDITOR_SAVE_PROJECT;
+                case 7: exportRequested = true; return (EditorMenuAction)0;
+                case 8: return (EditorMenuAction)0;
+                case 9: return (EditorMenuAction)0;
+                case 10:return (EditorMenuAction)0;
+            }
+        }
+        toolbarX += hitW[i] + gap * scale;
     }
-    if (x >= 437 && x <= 483 && y >= 7 && y <= 37) {
-        SaveCurrentStateForUndo();
-        for (auto& c : components) if (c->isSelected) c->angle = (c->angle + 90) % 360;
-        return (EditorMenuAction)0;
-    }
-    if (x >= 487 && x <= 541 && y >= 7 && y <= 37) {
-        SaveCurrentStateForUndo();
-        for (auto& c : components) if (c->isSelected) c->isMirrored = !c->isMirrored;
-        return (EditorMenuAction)0;
-    }
-    if (x >= 545 && x <= 599 && y >= 7 && y <= 37) {
-        bool hasSelection = false;
-        for (const auto& c : components) if (c->isSelected) { hasSelection = true; break; }
-        for (const auto& w : wireSystem.wires) if (w.isSelected) { hasSelection = true; break; }
-        if (hasSelection) { SaveCurrentStateForUndo(); DeleteSelectedItems(); }
-        return (EditorMenuAction)0;
-    }
-    if (x >= 603 && x <= 649 && y >= 7 && y <= 37) { Undo(); return (EditorMenuAction)0; }
-    if (x >= 653 && x <= 699 && y >= 7 && y <= 37) { Redo(); return (EditorMenuAction)0; }
-    if (x >= 703 && x <= 753 && y >= 7 && y <= 37) { return EDITOR_SAVE_PROJECT; }
-    if (x >= 757 && x <= 815 && y >= 7 && y <= 37) { exportRequested = true; return (EditorMenuAction)0; }
-    if (x >= 819 && x <= 865 && y >= 7 && y <= 37) { return (EditorMenuAction)0; }
-    if (x >= 869 && x <= 923 && y >= 7 && y <= 37) { return (EditorMenuAction)0; }
-    if (x >= 927 && x <= 973 && y >= 7 && y <= 37) { return (EditorMenuAction)0; }
 
     // ---------------- سایدبار چپ (فضای صفحه، بدون تغییر) ----------------
     if (x < (int)LEFT_LIBRARY_WIDTH && y > (int)TOOLBAR_HEIGHT) {

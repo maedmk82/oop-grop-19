@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
 #include <iomanip>
 #include <cstdio>
 
@@ -12,27 +13,37 @@ EditorPage::EditorPage(SDL_Window* window)
 {
     ownerWindow = window;
 
-    allTools = {
-        {"GND (Ground)", ComponentType::GND},
-        {"DC Voltage", ComponentType::DC_SOURCE},
-        {"Battery", ComponentType::BATTERY},
-        {"Logic State (0/1)", ComponentType::LOGIC_STATE},
-        {"Pulse Clock", ComponentType::CLOCK},
-        {"RES (Resistor)", ComponentType::RESISTOR},
-        {"CAP (Capacitor)", ComponentType::CAPACITOR},
-        {"Push Button", ComponentType::PUSH_BUTTON},
-        {"Switch", ComponentType::SWITCH},
-        {"LED", ComponentType::LED},
-        {"7Seg Display", ComponentType::SEVEN_SEGMENT},
-        {"AND Gate", ComponentType::GATE_AND},
-        {"OR Gate", ComponentType::GATE_OR},
-        {"NOT Gate", ComponentType::GATE_NOT},
-        {"NAND Gate", ComponentType::GATE_NAND},
-        {"NOR Gate", ComponentType::GATE_NOR},
-        {"XOR Gate", ComponentType::GATE_XOR},
-        {"FlipFlop D", ComponentType::FLIP_FLOP_D}
+    libraryCategories = {
+        {"Sources", true},
+        {"Analog / Passive", true},
+        {"Digital Inputs", false},
+        {"Outputs", false},
+        {"Logic Gates", false},
+        {"Sequential", false}
     };
 
+    allTools = {
+        {"GND (Ground)", ComponentType::GND, "Sources"},
+        {"DC Voltage", ComponentType::DC_SOURCE, "Sources"},
+        {"Battery", ComponentType::BATTERY, "Sources"},
+        {"Pulse Clock", ComponentType::CLOCK, "Sources"},
+        {"RES (Resistor)", ComponentType::RESISTOR, "Analog / Passive"},
+        {"CAP (Capacitor)", ComponentType::CAPACITOR, "Analog / Passive"},
+        {"Logic State (0/1)", ComponentType::LOGIC_STATE, "Digital Inputs"},
+        {"Push Button", ComponentType::PUSH_BUTTON, "Digital Inputs"},
+        {"Switch", ComponentType::SWITCH, "Digital Inputs"},
+        {"LED", ComponentType::LED, "Outputs"},
+        {"7Seg Display", ComponentType::SEVEN_SEGMENT, "Outputs"},
+        {"AND Gate", ComponentType::GATE_AND, "Logic Gates"},
+        {"OR Gate", ComponentType::GATE_OR, "Logic Gates"},
+        {"NOT Gate", ComponentType::GATE_NOT, "Logic Gates"},
+        {"NAND Gate", ComponentType::GATE_NAND, "Logic Gates"},
+        {"NOR Gate", ComponentType::GATE_NOR, "Logic Gates"},
+        {"XOR Gate", ComponentType::GATE_XOR, "Logic Gates"},
+        {"FlipFlop D", ComponentType::FLIP_FLOP_D, "Sequential"}
+    };
+
+    activeTools = { ComponentType::RESISTOR, ComponentType::LED, ComponentType::PUSH_BUTTON };
     filteredTools = allTools;
 }
 
@@ -156,18 +167,151 @@ void EditorPage::UpdateWirePreview()
 void EditorPage::UpdateSearchFilter()
 {
     std::string query = search.GetText();
-    std::transform(query.begin(), query.end(), query.begin(), ::tolower);
+    std::transform(query.begin(), query.end(), query.begin(), [](unsigned char c) { return (char)std::tolower(c); });
 
     filteredTools.clear();
 
     for (const auto& tool : allTools) {
-        std::string toolName = tool.name;
-        std::transform(toolName.begin(), toolName.end(), toolName.begin(), ::tolower);
+        std::string haystack = tool.name + " " + tool.category;
+        std::transform(haystack.begin(), haystack.end(), haystack.begin(), [](unsigned char c) { return (char)std::tolower(c); });
 
-        if (query.empty() || toolName.find(query) != std::string::npos) {
+        if (query.empty() || haystack.find(query) != std::string::npos) {
             filteredTools.push_back(tool);
         }
     }
+}
+
+bool EditorPage::IsActiveTool(ComponentType type) const
+{
+    return std::find(activeTools.begin(), activeTools.end(), type) != activeTools.end();
+}
+
+void EditorPage::AddActiveTool(ComponentType type)
+{
+    if (!IsActiveTool(type)) activeTools.push_back(type);
+}
+
+void EditorPage::RemoveActiveTool(ComponentType type)
+{
+    activeTools.erase(std::remove(activeTools.begin(), activeTools.end(), type), activeTools.end());
+}
+
+std::string EditorPage::ComponentTypeName(ComponentType type) const
+{
+    for (const auto& tool : allTools) {
+        if (tool.type == type) return tool.name;
+    }
+    return "Unknown";
+}
+
+void EditorPage::BuildLibraryHitBoxes()
+{
+    libraryHitBoxes.clear();
+
+    const float panelTop = TOOLBAR_HEIGHT;
+    const float panelH = std::max(120.0f, (float)lastWindowH - TOOLBAR_HEIGHT - STATUSBAR_HEIGHT);
+    const float x = 0.0f;
+    const float w = LEFT_LIBRARY_WIDTH;
+    const float rowH = 27.0f;
+    float y = panelTop + 30.0f;
+
+    const float previewH = 132.0f;
+    const float activeH = 150.0f;
+    const float previewY = std::max(y + 150.0f, panelTop + panelH - previewH - activeH - 14.0f);
+    const float activeY = previewY + previewH + 7.0f;
+    libraryPreviewRect = {8.0f, previewY, w - 16.0f, previewH};
+
+    std::string query = search.GetText();
+    const bool searching = !query.empty();
+
+    for (size_t ci = 0; ci < libraryCategories.size(); ++ci) {
+        const auto& cat = libraryCategories[ci];
+        bool hasMatch = false;
+        for (size_t ti = 0; ti < filteredTools.size(); ++ti) {
+            if (filteredTools[ti].category == cat.name) { hasMatch = true; break; }
+        }
+        if (!searching && !hasMatch) {
+            // Empty categories are still shown as tree nodes when there is no search.
+        }
+        if (searching && !hasMatch) continue;
+
+        SDL_FRect catRect = {6.0f, y, w - 12.0f, rowH};
+        libraryHitBoxes.push_back({LibraryHitBox::Kind::Category, (int)ci, catRect});
+        y += rowH + 2.0f;
+
+        const bool expanded = searching || cat.expanded;
+        if (!expanded) continue;
+
+        for (size_t ti = 0; ti < filteredTools.size(); ++ti) {
+            if (filteredTools[ti].category != cat.name) continue;
+            if (y + rowH >= previewY - 4.0f) break;
+
+            SDL_FRect toolRect = {12.0f, y, w - 38.0f, rowH - 2.0f};
+            SDL_FRect addRect = {w - 31.0f, y, 22.0f, rowH - 2.0f};
+            libraryHitBoxes.push_back({LibraryHitBox::Kind::Tool, (int)ti, toolRect});
+            libraryHitBoxes.push_back({LibraryHitBox::Kind::ToolAdd, (int)ti, addRect});
+            y += rowH;
+        }
+    }
+
+    // Active components list hit boxes
+    float ay = activeY + 28.0f;
+    for (size_t i = 0; i < activeTools.size(); ++i) {
+        if (ay + 24.0f > panelTop + panelH - 6.0f) break;
+        SDL_FRect item = {10.0f, ay, w - 40.0f, 22.0f};
+        SDL_FRect remove = {w - 29.0f, ay, 20.0f, 22.0f};
+        libraryHitBoxes.push_back({LibraryHitBox::Kind::ActiveTool, (int)i, item});
+        libraryHitBoxes.push_back({LibraryHitBox::Kind::ActiveRemove, (int)i, remove});
+        ay += 25.0f;
+    }
+}
+
+void EditorPage::DrawComponentPreview(SDL_Renderer* renderer, const SDL_FRect& rect)
+{
+    SDL_SetRenderDrawColor(renderer, 248, 248, 248, 255);
+    SDL_RenderFillRect(renderer, &rect);
+    SDL_SetRenderDrawColor(renderer, 160, 160, 160, 255);
+    SDL_RenderRect(renderer, &rect);
+
+    std::string selectedName = ComponentTypeName(selectedTool);
+    std::string titleText = "Preview: " + selectedName;
+    SDL_Texture* title = TextRenderer::CreateText(renderer, titleText.c_str(), {40,40,40,255});
+    if (title) {
+        float tw=0, th=0; SDL_GetTextureSize(title,&tw,&th);
+        SDL_FRect tp = {rect.x + 7.0f, rect.y + 6.0f, std::min(tw, rect.w-14.0f), th};
+        SDL_RenderTexture(renderer, title, nullptr, &tp);
+        SDL_DestroyTexture(title);
+    }
+
+    auto previewComp = CreateComponent(selectedTool, 0.0f, 0.0f);
+    if (!previewComp) return;
+
+    const float availW = rect.w - 20.0f;
+    const float availH = rect.h - 42.0f;
+    const float sx = availW / std::max(1.0f, previewComp->width);
+    const float sy = availH / std::max(1.0f, previewComp->height);
+    const float scale = std::min(1.35f, std::min(sx, sy));
+    const float scaledW = previewComp->width * scale;
+    const float scaledH = previewComp->height * scale;
+    const int vx = (int)(rect.x + (rect.w - scaledW) * 0.5f);
+    const int vy = (int)(rect.y + 32.0f + (availH - scaledH) * 0.5f);
+
+    SDL_Rect oldViewport{};
+    SDL_GetRenderViewport(renderer, &oldViewport);
+    float oldScaleX=1.0f, oldScaleY=1.0f;
+    SDL_GetRenderScale(renderer, &oldScaleX, &oldScaleY);
+
+    SDL_Rect previewViewport = {
+        vx, vy,
+        std::max(1, (int)std::ceil(scaledW) + 2),
+        std::max(1, (int)std::ceil(scaledH) + 2)
+    };
+    SDL_SetRenderViewport(renderer, &previewViewport);
+    SDL_SetRenderScale(renderer, scale, scale);
+    previewComp->Draw(renderer);
+
+    SDL_SetRenderScale(renderer, oldScaleX, oldScaleY);
+    SDL_SetRenderViewport(renderer, &oldViewport);
 }
 
 //-----------------------------------------
@@ -519,50 +663,71 @@ void EditorPage::DrawGrid(SDL_Renderer* renderer)
 
 void EditorPage::DrawSidebar(SDL_Renderer* renderer)
 {
-    SDL_FRect sidebarArea = { 0, TOOLBAR_HEIGHT, LEFT_LIBRARY_WIDTH, (float)lastWindowH - TOOLBAR_HEIGHT - STATUSBAR_HEIGHT };
-    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+    SDL_FRect sidebarArea = {0, TOOLBAR_HEIGHT, LEFT_LIBRARY_WIDTH, (float)lastWindowH - TOOLBAR_HEIGHT - STATUSBAR_HEIGHT};
+    SDL_SetRenderDrawColor(renderer, 214, 214, 214, 255);
     SDL_RenderFillRect(renderer, &sidebarArea);
 
-    int startY = (int)TOOLBAR_HEIGHT + 38;
-    for (size_t i = 0; i < filteredTools.size(); i++) {
-        SDL_FRect btnRect = { 8, (float)(startY + i * 34), LEFT_LIBRARY_WIDTH - 16, 28 };
+    BuildLibraryHitBoxes();
+    SDL_Color dark = {25,25,25,255};
 
-        if (isPlacingMode && selectedTool == filteredTools[i].type) {
-            SDL_SetRenderDrawColor(renderer, 140, 240, 240, 255);
-        } else {
-            SDL_SetRenderDrawColor(renderer, 230, 230, 230, 255);
+    // Header
+    SDL_Texture* head = TextRenderer::CreateText(renderer, "Component Library", dark);
+    if (head) { float tw=0,th=0; SDL_GetTextureSize(head,&tw,&th); SDL_FRect p={8,TOOLBAR_HEIGHT+7,tw,th}; SDL_RenderTexture(renderer,head,nullptr,&p); SDL_DestroyTexture(head); }
+
+    for (const auto& hit : libraryHitBoxes) {
+        if (hit.kind == LibraryHitBox::Kind::Category) {
+            const auto& cat = libraryCategories[hit.index];
+            SDL_SetRenderDrawColor(renderer, 195, 195, 195, 255);
+            SDL_RenderFillRect(renderer, &hit.rect);
+            SDL_SetRenderDrawColor(renderer, 125, 125, 125, 255);
+            SDL_RenderRect(renderer, &hit.rect);
+            const bool expanded = !search.GetText().empty() || cat.expanded;
+            const std::string marker = expanded ? "-" : "+";
+            SDL_Texture* mark = TextRenderer::CreateText(renderer, marker.c_str(), dark);
+            if (mark) { float tw=0,th=0; SDL_GetTextureSize(mark,&tw,&th); SDL_FRect p={hit.rect.x+6,hit.rect.y+2,tw,th}; SDL_RenderTexture(renderer,mark,nullptr,&p); SDL_DestroyTexture(mark); }
+            SDL_Texture* txt = TextRenderer::CreateText(renderer, cat.name.c_str(), dark);
+            if (txt) { float tw=0,th=0; SDL_GetTextureSize(txt,&tw,&th); SDL_FRect p={hit.rect.x+22,hit.rect.y+3,std::min(tw,hit.rect.w-30.0f),th}; SDL_RenderTexture(renderer,txt,nullptr,&p); SDL_DestroyTexture(txt); }
         }
-
-        SDL_RenderFillRect(renderer, &btnRect);
-
-        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
-        SDL_RenderRect(renderer, &btnRect);
-
-        SDL_Color textColor = {0, 0, 0, 255};
-        SDL_Texture* txt = TextRenderer::CreateText(renderer, filteredTools[i].name.c_str(), textColor);
-
-        if (txt) {
-            float texW = 0, texH = 0;
-            SDL_GetTextureSize(txt, &texW, &texH);
-
-            if (texW > 75) texW = 75;
-            if (texH > 20) texH = 20;
-
-            SDL_FRect txtPos = {
-                12,
-                (float)(startY + i * 34 + 4),
-                texW,
-                texH
-            };
-
-            SDL_RenderTexture(renderer, txt, NULL, &txtPos);
-            SDL_DestroyTexture(txt);
+        else if (hit.kind == LibraryHitBox::Kind::Tool) {
+            const auto& tool = filteredTools[hit.index];
+            const bool selected = isPlacingMode && selectedTool == tool.type;
+            SDL_SetRenderDrawColor(renderer, selected ? 140 : 235, selected ? 240 : 235, selected ? 240 : 235, 255);
+            SDL_RenderFillRect(renderer, &hit.rect);
+            SDL_SetRenderDrawColor(renderer, 145,145,145,255); SDL_RenderRect(renderer,&hit.rect);
+            SDL_Texture* txt=TextRenderer::CreateText(renderer, tool.name.c_str(), dark);
+            if(txt){float tw=0,th=0;SDL_GetTextureSize(txt,&tw,&th);SDL_FRect p={hit.rect.x+6,hit.rect.y+2,std::min(tw,hit.rect.w-10.0f),th};SDL_RenderTexture(renderer,txt,nullptr,&p);SDL_DestroyTexture(txt);}
+        }
+        else if (hit.kind == LibraryHitBox::Kind::ToolAdd) {
+            SDL_SetRenderDrawColor(renderer, IsActiveTool(filteredTools[hit.index].type) ? 170 : 215, IsActiveTool(filteredTools[hit.index].type) ? 235 : 215, 190, 255);
+            SDL_RenderFillRect(renderer,&hit.rect); SDL_SetRenderDrawColor(renderer,120,120,120,255); SDL_RenderRect(renderer,&hit.rect);
+            SDL_Texture* txt=TextRenderer::CreateText(renderer, IsActiveTool(filteredTools[hit.index].type) ? "*" : "+", dark);
+            if(txt){float tw=0,th=0;SDL_GetTextureSize(txt,&tw,&th);SDL_FRect p={hit.rect.x+(hit.rect.w-tw)/2,hit.rect.y+2,tw,th};SDL_RenderTexture(renderer,txt,nullptr,&p);SDL_DestroyTexture(txt);}
+        }
+        else if (hit.kind == LibraryHitBox::Kind::ActiveTool) {
+            const ComponentType type = activeTools[hit.index];
+            const bool selected = isPlacingMode && selectedTool == type;
+            SDL_SetRenderDrawColor(renderer, selected ? 170 : 235, selected ? 230 : 235, selected ? 190 : 235, 255);
+            SDL_RenderFillRect(renderer,&hit.rect); SDL_SetRenderDrawColor(renderer,150,150,150,255); SDL_RenderRect(renderer,&hit.rect);
+            SDL_Texture* txt=TextRenderer::CreateText(renderer,ComponentTypeName(type).c_str(),dark);
+            if(txt){float tw=0,th=0;SDL_GetTextureSize(txt,&tw,&th);SDL_FRect p={hit.rect.x+6,hit.rect.y+2,std::min(tw,hit.rect.w-8.0f),th};SDL_RenderTexture(renderer,txt,nullptr,&p);SDL_DestroyTexture(txt);}
+        }
+        else if (hit.kind == LibraryHitBox::Kind::ActiveRemove) {
+            SDL_SetRenderDrawColor(renderer,245,180,180,255); SDL_RenderFillRect(renderer,&hit.rect); SDL_SetRenderDrawColor(renderer,150,110,110,255); SDL_RenderRect(renderer,&hit.rect);
+            SDL_Texture* txt=TextRenderer::CreateText(renderer,"x",dark);
+            if(txt){float tw=0,th=0;SDL_GetTextureSize(txt,&tw,&th);SDL_FRect p={hit.rect.x+(hit.rect.w-tw)/2,hit.rect.y+2,tw,th};SDL_RenderTexture(renderer,txt,nullptr,&p);SDL_DestroyTexture(txt);}
         }
     }
+
+    DrawComponentPreview(renderer, libraryPreviewRect);
+
+    // Active list header and divider
+    const float activeY = libraryPreviewRect.y + libraryPreviewRect.h + 7.0f;
+    SDL_SetRenderDrawColor(renderer,180,180,180,255);
+    SDL_RenderLine(renderer,8,activeY,LEFT_LIBRARY_WIDTH-8,activeY);
+    SDL_Texture* ah=TextRenderer::CreateText(renderer,"Active Components",dark);
+    if(ah){float tw=0,th=0;SDL_GetTextureSize(ah,&tw,&th);SDL_FRect p={8,activeY+6,tw,th};SDL_RenderTexture(renderer,ah,nullptr,&p);SDL_DestroyTexture(ah);}
 }
 
-// علامت مبدأ مختصات (0,0) بوم — این تابع باید هنگامی صدا زده شود که
-// Viewport/Scale بوم فعال است (یعنی داخل بلاک رسم World-space)
 void EditorPage::DrawOriginMarker(SDL_Renderer* renderer)
 {
     SDL_SetRenderDrawColor(renderer, 200, 30, 30, 210);
@@ -707,7 +872,7 @@ void EditorPage::DrawInspectorPanel(SDL_Renderer* renderer, int windowW, int win
         SDL_FRect box={x+12,cy+20,RIGHT_INSPECTOR_WIDTH-24,28}; SDL_RenderFillRect(renderer,&box);
         SDL_SetRenderDrawColor(renderer,185,185,185,255); SDL_RenderRect(renderer,&box);
         SDL_Texture* v=TextRenderer::CreateText(renderer,f.value.c_str(),black);
-        if(v){float tw=0,th=0;SDL_GetTextureSize(v,&tw,&th); SDL_FRect p={box.x+6,box.y+4,box.w-12,th}; SDL_RenderTexture(renderer,v,NULL,&p); SDL_DestroyTexture(v);}
+        if(v){float tw=0,th=0;SDL_GetTextureSize(v,&tw,&th); SDL_FRect p={box.x+6,box.y+4,box.w-12,th}; SDL_RenderTexture(renderer,v,NULL,&p); SDL_DestroyTexture(v);}        
         cy += 56;
         if (cy > y+h-80) break;
     }
@@ -1026,15 +1191,36 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
         toolbarX += hitW[i] + gap * scale;
     }
 
-    // ---------------- سایدبار چپ (فضای صفحه، بدون تغییر) ----------------
+    // ---------------- Component Library / Tree / Active list ----------------
     if (x < (int)LEFT_LIBRARY_WIDTH && y > (int)TOOLBAR_HEIGHT) {
-        int index = (y - ((int)TOOLBAR_HEIGHT + 38)) / 34;
-        if (index >= 0 && index < (int)filteredTools.size()) {
-            int buttonY = ((int)TOOLBAR_HEIGHT + 38) + index * 34;
-            if (y >= buttonY && y <= buttonY + 28) {
-                selectedTool = filteredTools[index].type;
+        BuildLibraryHitBoxes();
+        for (const auto& hit : libraryHitBoxes) {
+            if (x < hit.rect.x || x > hit.rect.x + hit.rect.w || y < hit.rect.y || y > hit.rect.y + hit.rect.h) continue;
+
+            if (hit.kind == LibraryHitBox::Kind::Category) {
+                if (search.GetText().empty()) libraryCategories[hit.index].expanded = !libraryCategories[hit.index].expanded;
+                return (EditorMenuAction)0;
+            }
+            if (hit.kind == LibraryHitBox::Kind::Tool) {
+                selectedTool = filteredTools[hit.index].type;
                 SetWireMode(false);
                 isPlacingMode = true;
+                return (EditorMenuAction)0;
+            }
+            if (hit.kind == LibraryHitBox::Kind::ToolAdd) {
+                AddActiveTool(filteredTools[hit.index].type);
+                selectedTool = filteredTools[hit.index].type;
+                return (EditorMenuAction)0;
+            }
+            if (hit.kind == LibraryHitBox::Kind::ActiveTool) {
+                selectedTool = activeTools[hit.index];
+                SetWireMode(false);
+                isPlacingMode = true;
+                return (EditorMenuAction)0;
+            }
+            if (hit.kind == LibraryHitBox::Kind::ActiveRemove) {
+                RemoveActiveTool(activeTools[hit.index]);
+                return (EditorMenuAction)0;
             }
         }
         return action;
@@ -1388,6 +1574,11 @@ std::string EditorPage::SaveStateToString()
         }
     }
 
+    ss << "ACTIVE_TOOLS " << activeTools.size() << "\n";
+    for (ComponentType type : activeTools) {
+        ss << static_cast<int>(type) << "\n";
+    }
+
     ss << wireSystem.Serialize();
     return ss.str();
 }
@@ -1456,6 +1647,15 @@ void EditorPage::LoadStateFromString(const std::string& state)
 
                     AssignComponentId(component.get(), id);
                     components.push_back(std::move(component));
+                }
+            } else if (token == "ACTIVE_TOOLS") {
+                size_t activeCount = 0;
+                ss >> activeCount;
+                activeTools.clear();
+                for (size_t ai = 0; ai < activeCount; ++ai) {
+                    int typeInt = -1;
+                    ss >> typeInt;
+                    if (typeInt >= 0) activeTools.push_back(static_cast<ComponentType>(typeInt));
                 }
             } else if (token == "WIRE_SYSTEM_V1") {
                 // WireSystem::Deserialize expects the version token itself.

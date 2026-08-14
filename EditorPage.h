@@ -17,6 +17,19 @@
 struct ToolItem {
     std::string name;
     ComponentType type;
+    std::string category;
+};
+
+struct LibraryCategory {
+    std::string name;
+    bool expanded = true;
+};
+
+struct LibraryHitBox {
+    enum class Kind { Category, Tool, ActiveTool, ToolAdd, ActiveRemove };
+    Kind kind = Kind::Tool;
+    int index = -1;
+    SDL_FRect rect{};
 };
 
 class EditorPage
@@ -29,6 +42,10 @@ private:
     // --- لیست ابزارها ---
     std::vector<ToolItem> allTools;       // کل قطعات موجود
     std::vector<ToolItem> filteredTools;  // قطعاتی که پس از جستجو نمایش داده می‌شوند
+    std::vector<LibraryCategory> libraryCategories;
+    std::vector<ComponentType> activeTools; // قطعات پرکاربرد کاربر
+    std::vector<LibraryHitBox> libraryHitBoxes;
+    SDL_FRect libraryPreviewRect{};
     ComponentType selectedTool = ComponentType::RESISTOR;
     bool isPlacingMode = false;
     bool isWireMode = false;
@@ -54,7 +71,13 @@ private:
     void DrawInspectorPanel(SDL_Renderer* renderer, int windowW, int windowH);
     bool HandleInspectorClick(int x, int y);
     void DrawOriginMarker(SDL_Renderer* renderer);
-    void UpdateSearchFilter(); // تابع جدید برای فیلتر کردن قطعات
+    void UpdateSearchFilter(); // جست‌وجوی بلادرنگ روی نام و دسته‌بندی
+    void BuildLibraryHitBoxes();
+    bool IsActiveTool(ComponentType type) const;
+    void AddActiveTool(ComponentType type);
+    void RemoveActiveTool(ComponentType type);
+    std::string ComponentTypeName(ComponentType type) const;
+    void DrawComponentPreview(SDL_Renderer* renderer, const SDL_FRect& rect);
     std::unique_ptr<Component> CreateComponent(ComponentType type, float x, float y);
     Component* FindComponentById(int id) const;
     void AssignComponentId(Component* component, int forcedId = -1);
@@ -102,7 +125,7 @@ private:
     const int gridSpacing = 20;
 
     // Docked UI widths used by the editor layout.
-    static constexpr float LEFT_LIBRARY_WIDTH = 150.0f;
+    static constexpr float LEFT_LIBRARY_WIDTH = 220.0f;
     static constexpr float RIGHT_INSPECTOR_WIDTH = 240.0f;
     static constexpr float TOOLBAR_HEIGHT = 45.0f;
     static constexpr float STATUSBAR_HEIGHT = 28.0f;

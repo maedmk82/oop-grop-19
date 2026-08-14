@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include "SaveAs.h"
 #include "Page.h"
 #include "ProjectManager.h"
@@ -49,9 +50,9 @@ int main(int argc, char* argv[])
     }
 
     window = SDL_CreateWindow(
-        "Proteus Clone",
-        950,
-        600,
+        "Proteus Clone - Schematic Editor",
+        1200,
+        750,
         0
     );
 
@@ -148,12 +149,37 @@ int main(int argc, char* argv[])
                                     editor->LoadWorkspace(currentProject.path);
                                 }
 
-                                if (currentProject.pageSize.find("A3") != std::string::npos) {
-                                    SDL_SetWindowSize(window, 1350, 800);
-                                    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                                // ---------------------------------------------------------
+                                // اندازه پنجره بر اساس اندازه صفحه:
+                                // A3 = تمام صفحه
+                                // A4 = پنجره بزرگ ولی Windowed تا Toolbar/Inspector کاملاً دیده شوند
+                                // ---------------------------------------------------------
+                                const bool openAsA3 = currentProject.pageSize.find("A3") != std::string::npos;
+
+                                if (openAsA3) {
+                                    SDL_SetWindowFullscreen(window, true);
                                 } else {
-                                    SDL_SetWindowSize(window, 950, 600);
-                                    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                                    SDL_SetWindowFullscreen(window, false);
+
+                                    SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+                                    if (display == 0) display = SDL_GetPrimaryDisplay();
+
+                                    SDL_Rect usable{};
+                                    if (display != 0 && SDL_GetDisplayUsableBounds(display, &usable)) {
+                                        int targetW = static_cast<int>(usable.w * 0.90f);
+                                        int targetH = static_cast<int>(usable.h * 0.86f);
+
+                                        targetW = std::max(1100, targetW);
+                                        targetH = std::max(700, targetH);
+                                        targetW = std::min(targetW, usable.w);
+                                        targetH = std::min(targetH, usable.h);
+
+                                        SDL_SetWindowSize(window, targetW, targetH);
+                                        SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                                    } else {
+                                        SDL_SetWindowSize(window, 1280, 820);
+                                        SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+                                    }
                                 }
 
                                 CurrentPage = EDITOR_PAGE;

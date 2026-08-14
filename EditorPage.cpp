@@ -4,6 +4,8 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <iomanip>
+#include <cstdio>
 
 EditorPage::EditorPage(SDL_Window* window)
     : search(window)
@@ -517,13 +519,13 @@ void EditorPage::DrawGrid(SDL_Renderer* renderer)
 
 void EditorPage::DrawSidebar(SDL_Renderer* renderer)
 {
-    SDL_FRect sidebarArea = { 0, 50, 100, 550 };
+    SDL_FRect sidebarArea = { 0, TOOLBAR_HEIGHT, LEFT_LIBRARY_WIDTH, (float)lastWindowH - TOOLBAR_HEIGHT - STATUSBAR_HEIGHT };
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
     SDL_RenderFillRect(renderer, &sidebarArea);
 
-    int startY = 70;
+    int startY = (int)TOOLBAR_HEIGHT + 38;
     for (size_t i = 0; i < filteredTools.size(); i++) {
-        SDL_FRect btnRect = { 10, (float)(startY + i * 40), 80, 30 };
+        SDL_FRect btnRect = { 8, (float)(startY + i * 34), LEFT_LIBRARY_WIDTH - 16, 28 };
 
         if (isPlacingMode && selectedTool == filteredTools[i].type) {
             SDL_SetRenderDrawColor(renderer, 140, 240, 240, 255);
@@ -548,7 +550,7 @@ void EditorPage::DrawSidebar(SDL_Renderer* renderer)
 
             SDL_FRect txtPos = {
                 12,
-                (float)(startY + i * 40 + 5),
+                (float)(startY + i * 34 + 4),
                 texW,
                 texH
             };
@@ -579,7 +581,7 @@ void EditorPage::DrawOriginMarker(SDL_Renderer* renderer)
 // نوار وضعیت پایین صفحه: مختصات لحظه‌ای موس + درصد زوم + دکمه بازگشت به ۱۰۰٪
 void EditorPage::DrawStatusBar(SDL_Renderer* renderer, int windowW, int windowH)
 {
-    const int barHeight = 26;
+    const int barHeight = (int)STATUSBAR_HEIGHT;
 
     SDL_FRect bar = { 0, (float)(windowH - barHeight), (float)windowW, (float)barHeight };
     SDL_SetRenderDrawColor(renderer, 235, 235, 235, 255);
@@ -635,7 +637,7 @@ void EditorPage::DrawStatusBar(SDL_Renderer* renderer, int windowW, int windowH)
     }
 
     // --- دکمه‌ی بازگشت به ۱۰۰٪ (مطابق با محدوده‌ی چک‌شده در HandleClick) ---
-    SDL_FRect resetBtn = { (float)(windowW - 80), (float)(windowH - barHeight + 2), 70, (float)(barHeight - 4) };
+    SDL_FRect resetBtn = { (float)(windowW - 92), (float)(windowH - barHeight + 2), 82, (float)(barHeight - 4) };
     SDL_SetRenderDrawColor(renderer, 210, 225, 250, 255);
     SDL_RenderFillRect(renderer, &resetBtn);
     SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
@@ -654,6 +656,83 @@ void EditorPage::DrawStatusBar(SDL_Renderer* renderer, int windowW, int windowH)
 }
 
 //-----------------------------------------
+//-----------------------------------------
+// Docked Inspector / Properties
+//-----------------------------------------
+void EditorPage::DrawInspectorPanel(SDL_Renderer* renderer, int windowW, int windowH)
+{
+    const float x = (float)windowW - RIGHT_INSPECTOR_WIDTH;
+    const float y = TOOLBAR_HEIGHT;
+    const float h = (float)windowH - TOOLBAR_HEIGHT - STATUSBAR_HEIGHT;
+
+    SDL_SetRenderDrawColor(renderer, 238, 238, 238, 255);
+    SDL_FRect panel = { x, y, RIGHT_INSPECTOR_WIDTH, h };
+    SDL_RenderFillRect(renderer, &panel);
+    SDL_SetRenderDrawColor(renderer, 170, 170, 170, 255);
+    SDL_RenderRect(renderer, &panel);
+
+    SDL_Color black = {25,25,25,255};
+    SDL_Texture* title = TextRenderer::CreateText(renderer, "Properties", black);
+    if (title) {
+        float tw=0, th=0; SDL_GetTextureSize(title,&tw,&th);
+        SDL_FRect p = {x+12, y+10, tw, th};
+        SDL_RenderTexture(renderer,title,NULL,&p);
+        SDL_DestroyTexture(title);
+    }
+
+    if (!inspectorTarget) {
+        SDL_Texture* hint = TextRenderer::CreateText(renderer, "Select a component", {120,120,120,255});
+        if (hint) {
+            float tw=0,th=0; SDL_GetTextureSize(hint,&tw,&th);
+            SDL_FRect p={x+12,y+48,tw,th};
+            SDL_RenderTexture(renderer,hint,NULL,&p);
+            SDL_DestroyTexture(hint);
+        }
+        return;
+    }
+
+    auto fields = inspectorTarget->GetProperties();
+    float cy = y + 48;
+    SDL_Texture* typeText = TextRenderer::CreateText(renderer, inspectorTarget->label.c_str(), {0,90,170,255});
+    if (typeText) {
+        float tw=0,th=0; SDL_GetTextureSize(typeText,&tw,&th);
+        SDL_FRect p={x+12,cy,tw,th}; SDL_RenderTexture(renderer,typeText,NULL,&p); SDL_DestroyTexture(typeText);
+        cy += 28;
+    }
+
+    for (const auto& f : fields) {
+        SDL_Texture* l = TextRenderer::CreateText(renderer, f.label.c_str(), black);
+        if (l) { float tw=0,th=0; SDL_GetTextureSize(l,&tw,&th); SDL_FRect p={x+12,cy,tw,th}; SDL_RenderTexture(renderer,l,NULL,&p); SDL_DestroyTexture(l); }
+        SDL_SetRenderDrawColor(renderer,255,255,255,255);
+        SDL_FRect box={x+12,cy+20,RIGHT_INSPECTOR_WIDTH-24,28}; SDL_RenderFillRect(renderer,&box);
+        SDL_SetRenderDrawColor(renderer,185,185,185,255); SDL_RenderRect(renderer,&box);
+        SDL_Texture* v=TextRenderer::CreateText(renderer,f.value.c_str(),black);
+        if(v){float tw=0,th=0;SDL_GetTextureSize(v,&tw,&th); SDL_FRect p={box.x+6,box.y+4,box.w-12,th}; SDL_RenderTexture(renderer,v,NULL,&p); SDL_DestroyTexture(v);}        
+        cy += 56;
+        if (cy > y+h-80) break;
+    }
+
+    SDL_SetRenderDrawColor(renderer,220,235,250,255);
+    SDL_FRect editBtn={x+12,y+h-42,RIGHT_INSPECTOR_WIDTH-24,30}; SDL_RenderFillRect(renderer,&editBtn);
+    SDL_SetRenderDrawColor(renderer,110,140,170,255); SDL_RenderRect(renderer,&editBtn);
+    SDL_Texture* e=TextRenderer::CreateText(renderer,"Edit Properties",black);
+    if(e){float tw=0,th=0;SDL_GetTextureSize(e,&tw,&th); SDL_FRect p={editBtn.x+(editBtn.w-tw)/2,editBtn.y+5,tw,th}; SDL_RenderTexture(renderer,e,NULL,&p); SDL_DestroyTexture(e);}
+}
+
+bool EditorPage::HandleInspectorClick(int x, int y)
+{
+    const float panelX = (float)lastWindowW - RIGHT_INSPECTOR_WIDTH;
+    const float panelY = TOOLBAR_HEIGHT;
+    const float panelH = (float)lastWindowH - TOOLBAR_HEIGHT - STATUSBAR_HEIGHT;
+    if (x < panelX || y < panelY || y > panelY + panelH) return false;
+
+    if (inspectorTarget && y >= panelY + panelH - 48) {
+        OpenPropertiesFor(inspectorTarget);
+        return true;
+    }
+    return true;
+}
+
 // Draw
 //-----------------------------------------
 void EditorPage::Draw(SDL_Renderer* renderer)
@@ -662,8 +741,8 @@ void EditorPage::Draw(SDL_Renderer* renderer)
 
     bool isA3 = (pageSize.find("A3") != std::string::npos);
 
-    float gridMaxX = isA3 ? 1350.0f : 950.0f;
-    float gridMaxY = isA3 ? 800.0f : 600.0f;
+    float gridMaxX = isA3 ? 1350.0f : 1050.0f;
+    float gridMaxY = isA3 ? 800.0f : 650.0f;
 
     // اندازه‌ی کاغذ در مختصات جهانی (نسبت به مبدأ بوم، یعنی گوشه‌ی بالا-چپ ناحیه طراحی)
     float worldPaperW = gridMaxX - canvasBaseX;
@@ -795,109 +874,34 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     menu.Draw(renderer);
     search.Draw(renderer);
 
+    // --- Compact editor actions on the top toolbar ---
+    auto drawTopButton = [&](float x, float w, const char* text, SDL_Color fill) {
+        SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+        SDL_FRect r={x,7,w,30}; SDL_RenderFillRect(renderer,&r);
+        SDL_SetRenderDrawColor(renderer,120,120,120,255); SDL_RenderRect(renderer,&r);
+        SDL_Texture* t=TextRenderer::CreateText(renderer,text,{20,20,20,255});
+        if(t){float tw=0,th=0;SDL_GetTextureSize(t,&tw,&th); SDL_FRect p={x+(w-tw)/2,12,tw,th}; SDL_RenderTexture(renderer,t,NULL,&p); SDL_DestroyTexture(t);}
+    };
+    drawTopButton(385,48,"Wire",{190,235,200,255});
+    drawTopButton(437,46,"Rot",{210,220,245,255});
+    drawTopButton(487,54,"Mirror",{245,225,205,255});
+    drawTopButton(545,54,"Delete",{250,190,190,255});
+    drawTopButton(603,46,"Undo",{225,225,225,255});
+    drawTopButton(653,46,"Redo",{225,225,225,255});
+    drawTopButton(703,50,"Save",{205,235,215,255});
+    drawTopButton(757,58,"Export",{205,235,215,255});
+    drawTopButton(819,46,"Run",{180,245,180,255});
+    drawTopButton(869,54,"Pause",{255,230,140,255});
+    drawTopButton(927,46,"Stop",{245,190,190,255});
+
     SDL_Color black = {0, 0, 0, 255};
 
-    SDL_FRect rightSidebarArea = { gridMaxX - 100, 50, 100, gridMaxY - 50 };
-    SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
-    SDL_RenderFillRect(renderer, &rightSidebarArea);
-
-    SDL_SetRenderDrawColor(renderer, 150, 255, 150, 255);
-    SDL_FRect runBtn = { gridMaxX - 90, 70, 80, 30 };
-    SDL_RenderFillRect(renderer, &runBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &runBtn);
-
-    SDL_Texture* tRun = TextRenderer::CreateText(renderer, "Run", black);
-    if (tRun) {
-        SDL_FRect p = {gridMaxX - 65, 75, 30, 20};
-        SDL_RenderTexture(renderer, tRun, NULL, &p);
-        SDL_DestroyTexture(tRun);
-    }
-
-    SDL_SetRenderDrawColor(renderer, 255, 230, 120, 255);
-    SDL_FRect pauseBtn = { gridMaxX - 90, 120, 80, 30 };
-    SDL_RenderFillRect(renderer, &pauseBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &pauseBtn);
-
-    SDL_Texture* tPause = TextRenderer::CreateText(renderer, "Pause", black);
-    if (tPause) {
-        SDL_FRect p = {gridMaxX - 75, 125, 50, 20};
-        SDL_RenderTexture(renderer, tPause, NULL, &p);
-        SDL_DestroyTexture(tPause);
-    }
-
-    SDL_SetRenderDrawColor(renderer, 255, 150, 150, 255);
-    SDL_FRect stopBtn = { gridMaxX - 90, 170, 80, 30 };
-    SDL_RenderFillRect(renderer, &stopBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &stopBtn);
-
-    SDL_Texture* tStop = TextRenderer::CreateText(renderer, "Stop", black);
-    if (tStop) {
-        SDL_FRect p = {gridMaxX - 70, 175, 40, 20};
-        SDL_RenderTexture(renderer, tStop, NULL, &p);
-        SDL_DestroyTexture(tStop);
-    }
-
-    SDL_SetRenderDrawColor(renderer, isWireMode ? 120 : 200, isWireMode ? 230 : 220, isWireMode ? 160 : 255, 255);
-    SDL_FRect wireBtn = { 380, 10, 60, 30 };
-    SDL_RenderFillRect(renderer, &wireBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &wireBtn);
-    SDL_Texture* tWire = TextRenderer::CreateText(renderer, "Wire", black);
-    if (tWire) { SDL_FRect p = {385, 15, 45, 20}; SDL_RenderTexture(renderer, tWire, NULL, &p); SDL_DestroyTexture(tWire); }
-
-    SDL_SetRenderDrawColor(renderer, 200, 220, 255, 255);
-    SDL_FRect rotBtn = { 450, 10, 60, 30 };
-    SDL_RenderFillRect(renderer, &rotBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &rotBtn);
-    SDL_Texture* tRot = TextRenderer::CreateText(renderer, "Rot 90", black);
-    if (tRot) { SDL_FRect p = {455, 15, 50, 20}; SDL_RenderTexture(renderer, tRot, NULL, &p); SDL_DestroyTexture(tRot); }
-
-    SDL_SetRenderDrawColor(renderer, 255, 220, 200, 255);
-    SDL_FRect mirBtn = { 520, 10, 60, 30 };
-    SDL_RenderFillRect(renderer, &mirBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &mirBtn);
-    SDL_Texture* tMir = TextRenderer::CreateText(renderer, "Mirror", black);
-    if (tMir) { SDL_FRect p = {525, 15, 50, 20}; SDL_RenderTexture(renderer, tMir, NULL, &p); SDL_DestroyTexture(tMir); }
-
-    SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
-    SDL_FRect delBtn = { 590, 10, 60, 30 };
-    SDL_RenderFillRect(renderer, &delBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &delBtn);
-    SDL_Texture* tDel = TextRenderer::CreateText(renderer, "Delete", black);
-    if (tDel) { SDL_FRect p = {595, 15, 50, 20}; SDL_RenderTexture(renderer, tDel, NULL, &p); SDL_DestroyTexture(tDel); }
-
-    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-    SDL_FRect undoBtn = { 660, 10, 70, 30 };
-    SDL_RenderFillRect(renderer, &undoBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &undoBtn);
-    SDL_Texture* txtUndo = TextRenderer::CreateText(renderer, "< Undo", black);
-    if (txtUndo) { SDL_FRect p = {665, 15, 60, 20}; SDL_RenderTexture(renderer, txtUndo, NULL, &p); SDL_DestroyTexture(txtUndo); }
-
-    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-    SDL_FRect redoBtn = { 740, 10, 70, 30 };
-    SDL_RenderFillRect(renderer, &redoBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &redoBtn);
-    SDL_Texture* txtRedo = TextRenderer::CreateText(renderer, "Redo >", black);
-    if (txtRedo) { SDL_FRect p = {745, 15, 60, 20}; SDL_RenderTexture(renderer, txtRedo, NULL, &p); SDL_DestroyTexture(txtRedo); }
-
-    SDL_SetRenderDrawColor(renderer, 200, 255, 200, 255);
-    SDL_FRect exportBtn = { 820, 10, 110, 30 };
-    SDL_RenderFillRect(renderer, &exportBtn);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderRect(renderer, &exportBtn);
-    SDL_Texture* txtExport = TextRenderer::CreateText(renderer, "Export Image", black);
-    if (txtExport) { SDL_FRect p = {825, 15, 100, 20}; SDL_RenderTexture(renderer, txtExport, NULL, &p); SDL_DestroyTexture(txtExport); }
-
+    // Right-side run controls are now drawn in the toolbar/status area.
     // نوار وضعیت پایین صفحه (مختصات + زوم + دکمه Reset)
     DrawStatusBar(renderer, winW, winH);
+
+    // پنل Properties ثابت در سمت راست
+    DrawInspectorPanel(renderer, winW, winH);
 
     // پنجره‌ی ویژگی‌ها (اگر باز باشد) باید روی همه‌چیز رسم شود (بخش ۴.۷)
     DrawPropertiesPanel(renderer, winW, winH);
@@ -921,7 +925,7 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
     }
 
     // دکمه‌ی «بازگشت به ۱۰۰٪» در نوار وضعیت پایین صفحه (فضای صفحه)
-    SDL_FRect resetBtn = { (float)(lastWindowW - 80), (float)(lastWindowH - 24), 70, 22 };
+    SDL_FRect resetBtn = { (float)(lastWindowW - 92), (float)(lastWindowH - STATUSBAR_HEIGHT + 2), 82, STATUSBAR_HEIGHT - 4 };
     if (x >= resetBtn.x && x <= resetBtn.x + resetBtn.w && y >= resetBtn.y && y <= resetBtn.y + resetBtn.h) {
         ResetView();
         return (EditorMenuAction)0;
@@ -930,51 +934,41 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
     EditorMenuAction action = menu.HandleClick(x, y);
     search.HandleClick(x, y);
 
-    // ---------------- نوار ابزار بالا (فضای صفحه، بدون تغییر) ----------------
-    // Wire mode: 380..440
-    if (x >= 380 && x <= 440 && y >= 10 && y <= 40) {
-        SetWireMode(!isWireMode);
-        return (EditorMenuAction)0;
+    // ---------------- Top toolbar ----------------
+    if (x >= 385 && x <= 433 && y >= 7 && y <= 37) {
+        SetWireMode(!isWireMode); return (EditorMenuAction)0;
     }
-    if (x >= 450 && x <= 510 && y >= 10 && y <= 40) {
+    if (x >= 437 && x <= 483 && y >= 7 && y <= 37) {
         SaveCurrentStateForUndo();
         for (auto& c : components) if (c->isSelected) c->angle = (c->angle + 90) % 360;
         return (EditorMenuAction)0;
     }
-    if (x >= 520 && x <= 580 && y >= 10 && y <= 40) {
+    if (x >= 487 && x <= 541 && y >= 7 && y <= 37) {
         SaveCurrentStateForUndo();
         for (auto& c : components) if (c->isSelected) c->isMirrored = !c->isMirrored;
         return (EditorMenuAction)0;
     }
-    if (x >= 590 && x <= 650 && y >= 10 && y <= 40) {
+    if (x >= 545 && x <= 599 && y >= 7 && y <= 37) {
         bool hasSelection = false;
         for (const auto& c : components) if (c->isSelected) { hasSelection = true; break; }
         for (const auto& w : wireSystem.wires) if (w.isSelected) { hasSelection = true; break; }
-        if (hasSelection) {
-            SaveCurrentStateForUndo();
-            DeleteSelectedItems();
-        }
+        if (hasSelection) { SaveCurrentStateForUndo(); DeleteSelectedItems(); }
         return (EditorMenuAction)0;
     }
-    if (x >= 660 && x <= 730 && y >= 10 && y <= 40) {
-        Undo();
-        return (EditorMenuAction)0;
-    }
-    if (x >= 740 && x <= 810 && y >= 10 && y <= 40) {
-        Redo();
-        return (EditorMenuAction)0;
-    }
-    if (x >= 820 && x <= 930 && y >= 10 && y <= 40) {
-        exportRequested = true;
-        return (EditorMenuAction)0;
-    }
+    if (x >= 603 && x <= 649 && y >= 7 && y <= 37) { Undo(); return (EditorMenuAction)0; }
+    if (x >= 653 && x <= 699 && y >= 7 && y <= 37) { Redo(); return (EditorMenuAction)0; }
+    if (x >= 703 && x <= 753 && y >= 7 && y <= 37) { return EDITOR_SAVE_PROJECT; }
+    if (x >= 757 && x <= 815 && y >= 7 && y <= 37) { exportRequested = true; return (EditorMenuAction)0; }
+    if (x >= 819 && x <= 865 && y >= 7 && y <= 37) { return (EditorMenuAction)0; }
+    if (x >= 869 && x <= 923 && y >= 7 && y <= 37) { return (EditorMenuAction)0; }
+    if (x >= 927 && x <= 973 && y >= 7 && y <= 37) { return (EditorMenuAction)0; }
 
     // ---------------- سایدبار چپ (فضای صفحه، بدون تغییر) ----------------
-    if (x < 100 && y > 50) {
-        int index = (y - 70) / 40;
+    if (x < (int)LEFT_LIBRARY_WIDTH && y > (int)TOOLBAR_HEIGHT) {
+        int index = (y - ((int)TOOLBAR_HEIGHT + 38)) / 34;
         if (index >= 0 && index < (int)filteredTools.size()) {
-            int buttonY = 70 + index * 40;
-            if (y >= buttonY && y <= buttonY + 30) {
+            int buttonY = ((int)TOOLBAR_HEIGHT + 38) + index * 34;
+            if (y >= buttonY && y <= buttonY + 28) {
                 selectedTool = filteredTools[index].type;
                 SetWireMode(false);
                 isPlacingMode = true;
@@ -988,13 +982,16 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
     float wx, wy;
     ScreenToWorld(x, y, wx, wy);
 
+    // Docked right inspector consumes clicks in its own area.
+    if (HandleInspectorClick(x, y)) return (EditorMenuAction)0;
+
     // ---------------- سیستم سیم‌کشی ----------------
-    if (isWireMode && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
+    if (isWireMode && x >= (int)canvasBaseX && x < (int)(lastWindowW - RIGHT_INSPECTOR_WIDTH) && y >= (int)canvasBaseY && y < (int)(lastWindowH - STATUSBAR_HEIGHT)) {
         return HandleWireClick(wx, wy) ? (EditorMenuAction)0 : action;
     }
 
     // ---------------- جای‌گذاری قطعه با Snap to Grid ----------------
-    if (isPlacingMode && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
+    if (isPlacingMode && x >= (int)canvasBaseX && x < (int)(lastWindowW - RIGHT_INSPECTOR_WIDTH) && y >= (int)canvasBaseY && y < (int)(lastWindowH - STATUSBAR_HEIGHT)) {
 
         float snapX = std::round(wx / (float)gridSpacing) * gridSpacing;
         float snapY = std::round(wy / (float)gridSpacing) * gridSpacing;
@@ -1024,7 +1021,7 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
     // ---------------- دابل‌کلیک روی قطعه: باز کردن پنجره‌ی ویژگی‌ها (بخش ۴.۷) ----------------
     // SDL3 خودش تعداد کلیک‌های پیاپی را در event.button.clicks می‌شمارد،
     // پس نیازی به تایمر دستی برای تشخیص دابل‌کلیک نیست.
-    if (!isPlacingMode && clickCount >= 2 && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
+    if (!isPlacingMode && clickCount >= 2 && x >= (int)canvasBaseX && x < (int)(lastWindowW - RIGHT_INSPECTOR_WIDTH) && y >= (int)canvasBaseY && y < (int)(lastWindowH - STATUSBAR_HEIGHT)) {
         for (auto it = components.rbegin(); it != components.rend(); ++it) {
             if ((*it)->Contains(wx, wy)) {
                 OpenPropertiesFor(it->get());
@@ -1037,13 +1034,14 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
     if (!isPlacingMode) {
         for (auto& comp : components) {
             if (comp->HandleClick(wx, wy)) {
+                inspectorTarget = comp.get();
                 break;
             }
         }
     }
 
     // ---------------- انتخاب سیم ----------------
-    if (!isPlacingMode && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
+    if (!isPlacingMode && x >= (int)canvasBaseX && x < (int)(lastWindowW - RIGHT_INSPECTOR_WIDTH) && y >= (int)canvasBaseY && y < (int)(lastWindowH - STATUSBAR_HEIGHT)) {
         int wireIndex = -1;
         WirePoint hitPoint;
         if (wireSystem.FindWireHit(wx, wy, wireIndex, hitPoint)) {
@@ -1059,7 +1057,7 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
     }
 
     // ---------------- انتخاب قطعه / شروع درگ / شروع مستطیل انتخاب گروهی ----------------
-    if (!isPlacingMode && x >= (int)canvasBaseX && y >= (int)canvasBaseY) {
+    if (!isPlacingMode && x >= (int)canvasBaseX && x < (int)(lastWindowW - RIGHT_INSPECTOR_WIDTH) && y >= (int)canvasBaseY && y < (int)(lastWindowH - STATUSBAR_HEIGHT)) {
         bool clickedOnComponent = false;
 
         for (auto it = components.rbegin(); it != components.rend(); ++it) {
@@ -1103,6 +1101,11 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
             selStartX = wx;
             selStartY = wy;
         }
+    }
+
+    inspectorTarget = nullptr;
+    for (auto it = components.rbegin(); it != components.rend(); ++it) {
+        if ((*it)->isSelected) { inspectorTarget = it->get(); break; }
     }
 
     return action;
@@ -1247,6 +1250,11 @@ void EditorPage::DeleteSelectedItems()
     }
 
     wireSystem.DeleteSelected(components);
+    if (inspectorTarget) {
+        bool stillAlive = false;
+        for (const auto& c : components) if (c.get() == inspectorTarget) { stillAlive = true; break; }
+        if (!stillAlive) inspectorTarget = nullptr;
+    }
 }
 
 void EditorPage::ClearWorkspace()
@@ -1259,6 +1267,7 @@ void EditorPage::ClearWorkspace()
     dragOrigins.clear();
     isDragging = false;
     isSelectingBox = false;
+    inspectorTarget = nullptr;
 }
 
 //-----------------------------------------
@@ -1308,6 +1317,12 @@ std::string EditorPage::SaveStateToString()
         ss << "C " << comp->id << " " << (int)comp->type << " "
            << comp->x << " " << comp->y << " "
            << comp->angle << " " << comp->isMirrored << "\n";
+
+        const auto props = comp->GetProperties();
+        ss << "P " << props.size() << "\n";
+        for (const auto& prop : props) {
+            ss << std::quoted(prop.value) << "\n";
+        }
     }
 
     ss << wireSystem.Serialize();
@@ -1353,6 +1368,29 @@ void EditorPage::LoadStateFromString(const std::string& state)
 
                     component->angle = angle;
                     component->isMirrored = mirrored;
+
+                    // Optional persistent component properties. Older V2 files
+                    // without a P block remain loadable.
+                    const std::streampos afterComponent = ss.tellg();
+                    std::string propertyToken;
+                    if (ss >> propertyToken) {
+                        if (propertyToken == "P") {
+                            size_t propertyCount = 0;
+                            ss >> propertyCount;
+                            std::vector<std::string> values;
+                            values.reserve(propertyCount);
+                            for (size_t pi = 0; pi < propertyCount; ++pi) {
+                                std::string value;
+                                ss >> std::quoted(value);
+                                values.push_back(value);
+                            }
+                            component->SetProperties(values);
+                        } else {
+                            ss.clear();
+                            ss.seekg(afterComponent);
+                        }
+                    }
+
                     AssignComponentId(component.get(), id);
                     components.push_back(std::move(component));
                 }

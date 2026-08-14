@@ -6,6 +6,7 @@
 #include <vector>
 #include <cmath>
 #include <utility>
+#include <sstream>
 
 // -----------------------------------------
 // 1. انواع قطعات
@@ -469,6 +470,15 @@ public:
         }
         return false;
     }
+    std::vector<PropertyField> GetProperties() override {
+        return { { "Label", label }, { "Pressed (0/1)", isPressed ? "1" : "0" } };
+    }
+
+    void SetProperties(const std::vector<std::string>& values) override {
+        if (!values.empty()) label = values[0];
+        if (values.size() >= 2) isPressed = (values[1] == "1" || values[1] == "true" || values[1] == "TRUE");
+    }
+
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
         DrawLine(renderer, 0, 20, 15, 20);
@@ -530,6 +540,14 @@ public:
         pins.push_back({"A", 0, 20, false});
         pins.push_back({"Y", 60, 20, true});
     }
+    std::vector<PropertyField> GetProperties() override {
+        return { { "Label", label } };
+    }
+
+    void SetProperties(const std::vector<std::string>& values) override {
+        if (!values.empty()) label = values[0];
+    }
+
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
         DrawLine(renderer, 0, 20, 15, 20); // ورودی
@@ -644,6 +662,18 @@ public:
         return false;
     }
 
+    std::vector<PropertyField> GetProperties() override {
+        return { { "Label", label }, { "Open (0/1)", isOpen ? "1" : "0" } };
+    }
+
+    void SetProperties(const std::vector<std::string>& values) override {
+        if (!values.empty()) label = values[0];
+        if (values.size() >= 2) {
+            isOpen = (values[1] == "1" || values[1] == "true" || values[1] == "TRUE");
+            if (pins.size() > 1) pins[1].voltage = isOpen ? 0.0f : pins[0].voltage;
+        }
+    }
+
     void Draw(SDL_Renderer* renderer) override {
         SDL_SetRenderDrawColor(renderer, isSelected ? 0 : 0, isSelected ? 150 : 0, isSelected ? 255 : 0, 255);
 
@@ -673,6 +703,21 @@ public:
         label = "LED"; width = 50; height = 40;
         pins.push_back({"Anode", 0, 20, false});
         pins.push_back({"Cathode", 50, 20, false});
+    }
+
+    std::vector<PropertyField> GetProperties() override {
+        return { { "Label", label }, { "On (0/1)", isOn ? "1" : "0" }, { "Color RGB", std::to_string(color.r) + "," + std::to_string(color.g) + "," + std::to_string(color.b) } };
+    }
+
+    void SetProperties(const std::vector<std::string>& values) override {
+        if (!values.empty()) label = values[0];
+        if (values.size() >= 2) isOn = (values[1] == "1" || values[1] == "true" || values[1] == "TRUE");
+        if (values.size() >= 3) {
+            unsigned int r=255,g=0,b=0;
+            if (std::sscanf(values[2].c_str(), "%u,%u,%u", &r,&g,&b) == 3) {
+                color = SDL_Color{(Uint8)std::min(r,255u),(Uint8)std::min(g,255u),(Uint8)std::min(b,255u),255};
+            }
+        }
     }
 
     void Draw(SDL_Renderer* renderer) override {
@@ -723,6 +768,18 @@ public:
             return true;
         }
         return false;
+    }
+
+    std::vector<PropertyField> GetProperties() override {
+        return { { "Label", label }, { "State (0/1)", state ? "1" : "0" } };
+    }
+
+    void SetProperties(const std::vector<std::string>& values) override {
+        if (!values.empty()) label = values[0];
+        if (values.size() >= 2) {
+            state = (values[1] == "1" || values[1] == "true" || values[1] == "TRUE");
+            if (!pins.empty()) pins[0].voltage = state ? 5.0f : 0.0f;
+        }
     }
 
     void Draw(SDL_Renderer* renderer) override {

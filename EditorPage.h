@@ -51,6 +51,8 @@ private:
     void DrawGrid(SDL_Renderer* renderer);
     void DrawSidebar(SDL_Renderer* renderer);
     void DrawStatusBar(SDL_Renderer* renderer, int windowW, int windowH);
+    void DrawInspectorPanel(SDL_Renderer* renderer, int windowW, int windowH);
+    bool HandleInspectorClick(int x, int y);
     void DrawOriginMarker(SDL_Renderer* renderer);
     void UpdateSearchFilter(); // تابع جدید برای فیلتر کردن قطعات
     std::unique_ptr<Component> CreateComponent(ComponentType type, float x, float y);
@@ -92,12 +94,18 @@ private:
     float panOffsetStartX = 0.0f, panOffsetStartY = 0.0f;
 
     // مبدأ بوم روی صفحه؛ همان فاصله‌ی سایدبار چپ (100) و نوار ابزار بالا (50)
-    const float canvasBaseX = 100.0f;
-    const float canvasBaseY = 50.0f;
+    const float canvasBaseX = 150.0f;
+    const float canvasBaseY = 45.0f;
 
     // فاصله‌ی خطوط شبکه در مختصات جهانی. با تغییر همین مقدار، فاصله شبکه
     // در کل برنامه (رسم + Snap) قابل تنظیم است.
     const int gridSpacing = 20;
+
+    // Docked UI widths used by the editor layout.
+    static constexpr float LEFT_LIBRARY_WIDTH = 150.0f;
+    static constexpr float RIGHT_INSPECTOR_WIDTH = 240.0f;
+    static constexpr float TOOLBAR_HEIGHT = 45.0f;
+    static constexpr float STATUSBAR_HEIGHT = 28.0f;
 
     // ================================================================
     // ------------------- پنجره‌ی ویژگی‌ها (بخش ۴.۷) -------------------
@@ -109,6 +117,9 @@ private:
     std::vector<PropertyField> propertiesFields; // برای برچسب هر فیلد (از GetProperties)
     std::vector<std::string> propertiesEditText; // بافر متنیِ در حال ویرایش هر فیلد
     int propertiesActiveField = -1;              // فیلدی که الان تایپ در آن وارد می‌شود
+
+    // Docked inspector target. The selected component is always shown here.
+    Component* inspectorTarget = nullptr;
 
     void OpenPropertiesFor(Component* comp);
     void CloseProperties(bool applyChanges);
@@ -196,6 +207,7 @@ public:
     // تبدیل مختصات صفحه (پیکسل پنجره) به مختصات جهانی بوم
     void ScreenToWorld(int sx, int sy, float& wx, float& wy) const;
     bool IsWireMode() const { return isWireMode; }
+    Component* GetSelectedComponent() const { return inspectorTarget; }
     void SetWireMode(bool enabled);
 };
 #endif

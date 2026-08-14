@@ -30,8 +30,8 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
     {
         0,
         0,
-        950,
-        40
+        1200,
+        45
     };
 
     SDL_RenderFillRect(renderer, &bar);
@@ -66,80 +66,6 @@ void EditorMenu::Draw(SDL_Renderer* renderer)
         );
 
         SDL_DestroyTexture(fileText);
-    }
-
-
-    //-----------------------------------------
-    // Search Box
-    //-----------------------------------------
-
-    SDL_SetRenderDrawColor(
-        renderer,
-        255,
-        255,
-        255,
-        255
-    );
-
-    SDL_FRect searchBox =
-    {
-        100,
-        5,
-        350,
-        30
-    };
-
-    SDL_RenderFillRect(
-        renderer,
-        &searchBox
-    );
-
-
-    // Border
-
-    SDL_SetRenderDrawColor(
-        renderer,
-        130,
-        130,
-        130,
-        255
-    );
-
-    SDL_RenderRect(
-        renderer,
-        &searchBox
-    );
-
-
-    //-----------------------------------------
-    // Search Text
-    //-----------------------------------------
-
-    SDL_Texture* searchText =
-        TextRenderer::CreateText(
-            renderer,
-            "Search",
-            black
-        );
-
-    if(searchText)
-    {
-        SDL_FRect pos =
-        {
-            115,
-            10,
-            70,
-            20
-        };
-
-        SDL_RenderTexture(
-            renderer,
-            searchText,
-            NULL,
-            &pos
-        );
-
-        SDL_DestroyTexture(searchText);
     }
 
 

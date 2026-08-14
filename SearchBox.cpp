@@ -26,9 +26,9 @@ void SearchBox::Draw(SDL_Renderer* renderer)
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
     SDL_FRect box = {
-        120,   // تغییر یافته به سمت چپ
+        155,   // search begins after the left component library
         5,
-        250,   // عرض کمی جمع‌وجورتر شد تا با بقیه دکمه‌ها تداخل نکند
+        220,   // compact toolbar search width
         30
     };
 
@@ -76,7 +76,7 @@ void SearchBox::Draw(SDL_Renderer* renderer)
         }
 
         SDL_FRect pos = {
-            130,   // متن هم به سمت چپ شیفت پیدا کرد
+            165,   // متن search
             10,
             texW,
             20
@@ -94,7 +94,7 @@ void SearchBox::Draw(SDL_Renderer* renderer)
 void SearchBox::HandleClick(int x, int y)
 {
     // مختصات کلیک هم با کادر جدیدِ سمت چپ تنظیم شد
-    if(x >= 120 && x <= 370 &&
+    if(x >= 155 && x <= 375 &&
        y >= 5 && y <= 35)
     {
         active = true;

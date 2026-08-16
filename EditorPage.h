@@ -202,6 +202,15 @@ public:
     float dragStartMouseX = 0.0f;
     float dragStartMouseY = 0.0f;
 
+    // ---------------------------------------------------------------
+    // Wire dragging: حرکت دادن کل مسیر سیم با حفظ شکل ۹۰ درجه‌ای
+    // ---------------------------------------------------------------
+    bool isWireDragging = false;
+    int wireDragIndex = -1;
+    float wireDragStartMouseX = 0.0f;
+    float wireDragStartMouseY = 0.0f;
+    std::vector<WirePoint> wireDragOriginalPoints;
+
     // توابع موس
     void HandleMouseMove(int x, int y);
     void HandleMouseRelease(int x, int y);
@@ -209,7 +218,15 @@ public:
     // لغو حالت جای‌گذاری قطعه (مثلاً با کلیک راست موس) — کاربر می‌تواند
     // بعد از قرار دادن هر تعداد نمونه که خواست، با این تابع از حالت
     // جای‌گذاری خارج شود.
-    void CancelPlacing() { isPlacingMode = false; wireSystem.Cancel(); }
+    void CancelPlacing() {
+        isPlacingMode = false;
+        isWireMode = false;
+        isWireDragging = false;
+        wireDragIndex = -1;
+        wireDragOriginalPoints.clear();
+        wireSystem.Cancel();
+        wireSystem.ClearSelection();
+    }
 
     // ================================================================
     // -------------------- توابع جدید Zoom / Pan ---------------------

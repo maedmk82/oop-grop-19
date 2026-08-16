@@ -19,7 +19,10 @@ EditorPage::EditorPage(SDL_Window* window)
         {"Digital Inputs", false},
         {"Outputs", false},
         {"Logic Gates", false},
-        {"Sequential", false}
+        {"Sequential", false},
+        {"Converters", true},
+        {"Microcontrollers", true},
+        {"Peripherals", true}
     };
 
     allTools = {
@@ -40,7 +43,13 @@ EditorPage::EditorPage(SDL_Window* window)
         {"NAND Gate", ComponentType::GATE_NAND, "Logic Gates"},
         {"NOR Gate", ComponentType::GATE_NOR, "Logic Gates"},
         {"XOR Gate", ComponentType::GATE_XOR, "Logic Gates"},
-        {"FlipFlop D", ComponentType::FLIP_FLOP_D, "Sequential"}
+        {"FlipFlop D", ComponentType::FLIP_FLOP_D, "Sequential"},
+        {"ADC", ComponentType::ADC, "Converters"},
+        {"DAC", ComponentType::DAC, "Converters"},
+        {"Microcontroller (MCU)", ComponentType::MICROCONTROLLER, "Microcontrollers"},
+        {"External RAM/EEPROM", ComponentType::EXTERNAL_MEMORY, "Peripherals"},
+        {"LCD 16x2", ComponentType::LCD_1602, "Peripherals"},
+        {"Keypad 4x4", ComponentType::KEYPAD_4X4, "Peripherals"}
     };
 
     activeTools = { ComponentType::RESISTOR, ComponentType::LED, ComponentType::PUSH_BUTTON };
@@ -69,6 +78,12 @@ std::unique_ptr<Component> EditorPage::CreateComponent(ComponentType type, float
         case ComponentType::GATE_NOR: return std::make_unique<GateNORComponent>(x, y);
         case ComponentType::GATE_XOR: return std::make_unique<GateXORComponent>(x, y);
         case ComponentType::FLIP_FLOP_D: return std::make_unique<FlipFlopDComponent>(x, y);
+        case ComponentType::ADC: return std::make_unique<ADCComponent>(x, y);
+        case ComponentType::DAC: return std::make_unique<DACComponent>(x, y);
+        case ComponentType::MICROCONTROLLER: return std::make_unique<MicrocontrollerComponent>(x, y);
+        case ComponentType::EXTERNAL_MEMORY: return std::make_unique<ExternalMemoryComponent>(x, y);
+        case ComponentType::LCD_1602: return std::make_unique<LCD1602Component>(x, y);
+        case ComponentType::KEYPAD_4X4: return std::make_unique<Keypad4x4Component>(x, y);
         default: return nullptr;
     }
 }
@@ -99,10 +114,17 @@ void EditorPage::SetWireMode(bool enabled)
     isWireMode = enabled;
     if (enabled) {
         isPlacingMode = false;
+        isWireDragging = false;
+        wireDragIndex = -1;
+        wireDragOriginalPoints.clear();
         for (auto& c : components) c->isSelected = false;
         wireSystem.ClearSelection();
     } else {
         wireSystem.Cancel();
+        isWireDragging = false;
+        wireDragIndex = -1;
+        wireDragOriginalPoints.clear();
+        wireSystem.ClearSelection();
     }
 }
 
@@ -872,7 +894,7 @@ void EditorPage::DrawInspectorPanel(SDL_Renderer* renderer, int windowW, int win
         SDL_FRect box={x+12,cy+20,RIGHT_INSPECTOR_WIDTH-24,28}; SDL_RenderFillRect(renderer,&box);
         SDL_SetRenderDrawColor(renderer,185,185,185,255); SDL_RenderRect(renderer,&box);
         SDL_Texture* v=TextRenderer::CreateText(renderer,f.value.c_str(),black);
-        if(v){float tw=0,th=0;SDL_GetTextureSize(v,&tw,&th); SDL_FRect p={box.x+6,box.y+4,box.w-12,th}; SDL_RenderTexture(renderer,v,NULL,&p); SDL_DestroyTexture(v);}        
+        if(v){float tw=0,th=0;SDL_GetTextureSize(v,&tw,&th); SDL_FRect p={box.x+6,box.y+4,box.w-12,th}; SDL_RenderTexture(renderer,v,NULL,&p); SDL_DestroyTexture(v);}
         cy += 56;
         if (cy > y+h-80) break;
     }
@@ -978,11 +1000,35 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     wireSystem.Draw(renderer, components);
 
     // =========================================================
+    // بخش ۷.۶: انتشار ولتاژِ نتیجه‌ی فریمِ قبل روی سیم‌ها، قبل از این‌که
+    // قطعات (از جمله میکروکنترلر) این فریم را Update کنند - تا خروجیِ
+    // پورت‌های میکرو واقعاً به قطعات جانبیِ متصل روی بوم برسد.
+    // =========================================================
+    wireSystem.PropagateVoltages(components);
+
+    // =========================================================
     // رسم قطعات (بدون تغییر نسبت به قبل، چون در فضای جهانی هستند)
     // =========================================================
     for (auto& comp : components) {
         comp->Update();
         comp->Draw(renderer);
+
+        // بخش ۷.۸: رسمِ متنِ واقعیِ خطوط LCD (Component به TextRenderer
+        // دسترسی ندارد، پس این کار اینجا در EditorPage انجام می‌شود).
+        if (auto* lcd = dynamic_cast<LCD1602Component*>(comp.get())) {
+            SDL_Color lcdTextColor{20, 60, 20, 255};
+            for (int row = 0; row < LCD1602Component::ROWS; ++row) {
+                SDL_Texture* lineTex = TextRenderer::CreateText(renderer, lcd->GetLine(row).c_str(), lcdTextColor);
+                if (lineTex) {
+                    auto worldPos = lcd->LocalToWorld(6.0f, 6.0f + row * 12.0f);
+                    float texW = 0, texH = 0;
+                    SDL_GetTextureSize(lineTex, &texW, &texH);
+                    SDL_FRect dst{worldPos.first, worldPos.second, texW, texH};
+                    SDL_RenderTexture(renderer, lineTex, NULL, &dst);
+                    SDL_DestroyTexture(lineTex);
+                }
+            }
+        }
 
         // هایلایت انتخاب (بخش ۴.۲): متناسب با اندازه‌ی واقعی هر قطعه،
         // نه یک جعبه‌ی ثابت — تا هم برای قطعات کوچک (مثلاً LOGIC 30x30)
@@ -1022,13 +1068,18 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     }
 
     // سایه (Ghosting) قطعه هنگام جای‌گذاری - با Snap to Grid در فضای جهانی
+    // سایه (Ghosting) قطعه واقعی هنگام جای‌گذاری - با Snap to Grid در فضای جهانی
     if (isPlacingMode && worldMouseX >= 0 && worldMouseY >= 0) {
         float snapX = std::round(worldMouseX / (float)gridSpacing) * gridSpacing;
         float snapY = std::round(worldMouseY / (float)gridSpacing) * gridSpacing;
 
-        SDL_SetRenderDrawColor(renderer, 0, 200, 0, 120);
-        SDL_FRect ghostRect = { snapX, snapY, 60, 40 };
-        SDL_RenderFillRect(renderer, &ghostRect);
+        // با استفاده از تابع آماده خودتان، یک نسخه موقت از قطعه می‌سازیم
+        std::unique_ptr<Component> previewComp = CreateComponent(selectedTool, snapX, snapY);
+
+        if (previewComp) {
+            previewComp->isSelected = true; // با این کار قطعه به رنگ نارنجی/متفاوت در می‌آید تا مشخص شود که پیش‌نمایش است
+            previewComp->Draw(renderer);    // رسم شکل واقعی قطعه زیر نشانگر موس
+        }
     }
 
     // -----------------------------------------------------------
@@ -1095,7 +1146,24 @@ void EditorPage::Draw(SDL_Renderer* renderer)
     for (int i = 0; i < 11; ++i) {
         buttonX[i] = toolbarX;
         buttonW[i] = specs[i].baseWidth * scale;
-        drawTopButton(buttonX[i], buttonW[i], specs[i].text, specs[i].fill);
+
+        SDL_Color fillColor = specs[i].fill;
+
+        // ---------------------------------------------------------------
+        // بخش ۵ (سیستم سیم‌کشی): وقتی حالت سیم‌کشی (Wire Mode) فعال است،
+        // دکمه‌ی "Wire" باید یک هاله‌ی نارنجی/زرد دور خودش بگیرد تا کاربر
+        // بلافاصله بفهمد در حال حاضر در حالت سیم‌کشی قرار دارد.
+        // ---------------------------------------------------------------
+        if (i == 0 && isWireMode) {
+            SDL_SetRenderDrawColor(renderer, 255, 170, 0, 255);
+            SDL_FRect halo1 = { buttonX[i] - 4.0f, 7.0f - 4.0f, buttonW[i] + 8.0f, 30.0f + 8.0f };
+            SDL_RenderRect(renderer, &halo1);
+            SDL_FRect halo2 = { buttonX[i] - 2.0f, 7.0f - 2.0f, buttonW[i] + 4.0f, 30.0f + 4.0f };
+            SDL_RenderRect(renderer, &halo2);
+            fillColor = { 255, 214, 110, 255 };
+        }
+
+        drawTopButton(buttonX[i], buttonW[i], specs[i].text, fillColor);
         toolbarX += buttonW[i] + gap * scale;
     }
 
@@ -1137,6 +1205,12 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
     }
 
     EditorMenuAction action = menu.HandleClick(x, y);
+    // اگر منوی File یک فرمان واقعی (New/Open/Save/Save As) برگرداند،
+    // باید همین‌جا آن را به main.cpp تحویل بدهیم. در غیر این صورت
+    // منوی File توسط Component Library در مختصات پایین‌تر مصرف می‌شد.
+    if (action != EDITOR_NO_ACTION) {
+        return action;
+    }
     search.HandleClick(x, y);
 
     // ---------------- Top toolbar (Responsive) ----------------
@@ -1166,11 +1240,28 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
                 case 0: SetWireMode(!isWireMode); return (EditorMenuAction)0;
                 case 1:
                     SaveCurrentStateForUndo();
-                    for (auto& c : components) if (c->isSelected) c->angle = (c->angle + 90) % 360;
+                    for (auto& c : components) {
+                        if (c->isSelected) {
+                            c->angle = (c->angle + 90) % 360;
+                            // بخش ۵.۴ - چرخش قطعه موقعیت پایه‌ها را عوض می‌کند؛
+                            // سیم‌های متصل (و هر سیمی که از طریق یک Junction به
+                            // آن‌ها وصل است) باید بلافاصله با حفظ زوایای ۹۰ درجه
+                            // با موقعیت جدید پایه هماهنگ شوند.
+                            wireSystem.MoveComponentWires(c->id, components, gridSpacing);
+                        }
+                    }
                     return (EditorMenuAction)0;
                 case 2:
                     SaveCurrentStateForUndo();
-                    for (auto& c : components) if (c->isSelected) c->isMirrored = !c->isMirrored;
+                    for (auto& c : components) {
+                        if (c->isSelected) {
+                            c->isMirrored = !c->isMirrored;
+                            // همان دلیل بالا: قرینه‌کردن هم موقعیت پایه‌ها را
+                            // عوض می‌کند، پس سیم‌های متصل (و زنجیره‌ی
+                            // Junction های وابسته به آن‌ها) باید به‌روزرسانی شوند.
+                            wireSystem.MoveComponentWires(c->id, components, gridSpacing);
+                        }
+                    }
                     return (EditorMenuAction)0;
                 case 3: {
                     bool hasSelection = false;
@@ -1289,7 +1380,7 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
         }
     }
 
-    // ---------------- انتخاب سیم ----------------
+    // ---------------- انتخاب و جابه‌جایی سیم ----------------
     if (!isPlacingMode && x >= (int)canvasBaseX && x < (int)(lastWindowW - RIGHT_INSPECTOR_WIDTH) && y >= (int)canvasBaseY && y < (int)(lastWindowH - STATUSBAR_HEIGHT)) {
         int wireIndex = -1;
         WirePoint hitPoint;
@@ -1298,6 +1389,12 @@ EditorMenuAction EditorPage::HandleClick(int x, int y, int clickCount)
             wireSystem.ClearSelection();
             if (wireIndex >= 0 && wireIndex < (int)wireSystem.wires.size()) {
                 wireSystem.wires[wireIndex].isSelected = true;
+                isWireDragging = true;
+                wireDragIndex = wireIndex;
+                wireDragStartMouseX = wx;
+                wireDragStartMouseY = wy;
+                wireDragOriginalPoints = wireSystem.wires[wireIndex].points;
+                SaveCurrentStateForUndo();
             }
             isDragging = false;
             isSelectingBox = false;
@@ -1453,7 +1550,9 @@ EditorMenuAction EditorPage::HandleKeyboard(SDL_Event event)
         // ---------------- Esc : لغو حالت جای‌گذاری قطعه ----------------
         if (event.key.key == SDLK_ESCAPE) {
             isPlacingMode = false;
-            if (isWireMode) wireSystem.Cancel();
+            if (isWireMode || wireSystem.isDrawing) {
+                SetWireMode(false);
+            }
             return (EditorMenuAction)0;
         }
 
@@ -1784,6 +1883,20 @@ void EditorPage::HandleMouseMove(int x, int y) {
         return;
     }
 
+    if (isWireDragging && wireDragIndex >= 0 && wireDragIndex < (int)wireSystem.wires.size()) {
+        const float dxRaw = wx - wireDragStartMouseX;
+        const float dyRaw = wy - wireDragStartMouseY;
+        const float dx = std::round(dxRaw / (float)gridSpacing) * gridSpacing;
+        const float dy = std::round(dyRaw / (float)gridSpacing) * gridSpacing;
+        auto& wire = wireSystem.wires[wireDragIndex];
+        wire.points = wireDragOriginalPoints;
+        for (auto& p : wire.points) {
+            p.x += dx;
+            p.y += dy;
+        }
+        return;
+    }
+
     if (isDragging) {
         // افستِ خامِ کل حرکت موس نسبت به نقطه‌ی شروع درگ (بدون Snap)
         float totalDx = wx - dragStartMouseX;
@@ -1799,6 +1912,19 @@ void EditorPage::HandleMouseMove(int x, int y) {
             origin.comp->y = std::round(targetY / (float)gridSpacing) * gridSpacing;
         }
 
+        // ---------------------------------------------------------------
+        // بخش ۵.۴ (Wire Dragging): سیم‌های متصل به پایه‌های قطعه‌ی
+        // جابه‌جاشونده باید هم‌زمان با حرکت قطعه، طول/زاویه‌ی خودشان را
+        // تغییر دهند اما زوایای ۹۰ درجه (Orthogonal) را حفظ کنند؛ و اگر
+        // سیمِ دیگری از طریق یک Junction Dot به همان نقطه وصل بوده، آن
+        // سیم هم باید به همان اندازه همراه شود تا از محل گره جدا نشود.
+        // MoveComponentWires هر دو مورد را پوشش می‌دهد (و در انتها خودش
+        // RebuildJunctions را هم صدا می‌زند).
+        // ---------------------------------------------------------------
+        for (auto& origin : dragOrigins) {
+            wireSystem.MoveComponentWires(origin.comp->id, components, gridSpacing);
+        }
+
         lastMouseX = wx;
         lastMouseY = wy;
     }
@@ -1807,6 +1933,15 @@ void EditorPage::HandleMouseMove(int x, int y) {
 void EditorPage::HandleMouseRelease(int x, int y) {
     if (isPanning) {
         StopPan();
+    }
+
+    if (isWireDragging) {
+        if (wireDragIndex >= 0 && wireDragIndex < (int)wireSystem.wires.size()) {
+            wireSystem.RebuildJunctions(components);
+        }
+        isWireDragging = false;
+        wireDragIndex = -1;
+        wireDragOriginalPoints.clear();
     }
 
     if (isDragging) {
